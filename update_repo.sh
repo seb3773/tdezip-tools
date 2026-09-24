@@ -36,7 +36,7 @@ Architectures: amd64
 Codename: stable
 Components: main
 Date: ${DATE_UTC}
-Description: Dedicated Tools Repository for TdeZip / PeaZip (Trinity Desktop Environment)
+Description: Dedicated Tools Repository for TdeZip (TDE Archive Manager)
 Label: TdeZip-Tools APT Repository
 Origin: TdeZip-Tools
 Suite: stable

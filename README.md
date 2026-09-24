@@ -1,6 +1,6 @@
 # TdeZip-Tools
 
-Official APT repository and source tree for custom companion compression and archiving engines for **TdeZip** (the native Trinity Desktop / C++ archiver based on PeaZip).
+Official APT repository and source tree for custom companion compression and archiving engines for **TdeZip** (TDE Archive Manager).
 
 🌐 **Repository Portal / GitHub Pages**: [https://seb3773.github.io/tdezip-tools/](https://seb3773.github.io/tdezip-tools/)
 
