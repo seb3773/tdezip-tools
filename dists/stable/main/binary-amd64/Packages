@@ -1,14 +1,14 @@
 Package: lha
-Version: 1.14i-1
+Version: 1.14i-11
 Architecture: amd64
 Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
 Depends: libc6 (>= 2.15)
 Provides: lha
-Filename: pool/main/l/lha/lha_1.14i-1_amd64.deb
-Size: 56612
-MD5sum: 9f1e6632896b71bf5469edc513019b87
-SHA1: 1cb92263d220a344304b976cce232978b88a27b7
-SHA256: 820c7b2a44673f94086dbd9bc663876826b5a4facba82873ef5e66db36e781f8
+Filename: pool/main/l/lha/lha_1.14i-11_amd64.deb
+Size: 56592
+MD5sum: da5a7eab62b892f849d0ea495045ab2e
+SHA1: 41d909f65aeb2af2e452c3c618037402a2e35cd8
+SHA256: 95a9b9aaf7a6fc4ca177a3c22c22f815a594dcc5edddbb40abcef443034a7bfe
 Section: utils
 Priority: optional
 Description: LHA archive compression and extraction utility (native C)

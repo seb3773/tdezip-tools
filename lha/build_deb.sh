@@ -3,7 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_DIR="${SCRIPT_DIR}/pkg_root"
-VERSION="1.14i-1"
+VERSION="1.14i-11"
 ARCH="amd64"
 DEB_NAME="lha_${VERSION}_${ARCH}.deb"
 
@@ -34,7 +34,7 @@ cp "${SCRIPT_DIR}/header.doc.md" "${PKG_DIR}/usr/share/doc/lha/"
 # DEBIAN/control
 cat << 'CTRL_EOF' > "${PKG_DIR}/DEBIAN/control"
 Package: lha
-Version: 1.14i-1
+Version: 1.14i-11
 Section: utils
 Priority: optional
 Architecture: amd64

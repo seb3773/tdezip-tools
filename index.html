@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -181,45 +181,45 @@
     <header>
       <div class="badge">Trinity Desktop Environment &bull; Linux</div>
       <h1>TdeZip-Tools Repository</h1>
-      <p class="lead">Dépôt APT officiel des outils et moteurs d'archivage haute performance pour TdeZip / PeaZip.</p>
+      <p class="lead">Official APT repository for high-performance companion archive and compression utilities for TdeZip / PeaZip.</p>
     </header>
 
     <div class="card">
-      <h2>🚀 Configuration du Dépôt APT</h2>
-      <p>Pour permettre à TdeZip (ou APT) d'installer et mettre à jour automatiquement les outils auxiliaires :</p>
+      <h2>🚀 APT Repository Setup</h2>
+      <p>To enable automatic installation and updates of companion archiving tools via APT:</p>
       <pre><code>echo "deb [trusted=yes] https://seb3773.github.io/tdezip-tools/ stable main" | sudo tee /etc/apt/sources.list.d/tdezip-tools.list
 sudo apt-get update</code></pre>
     </div>
 
     <div class="card">
-      <h2>📦 Paquets Disponibles &amp; En Développement</h2>
+      <h2>📦 Available &amp; Upcoming Packages</h2>
       <div class="tools-grid">
         <div class="tool-box">
-          <h3>lha <span class="status-badge status-ready">Disponible</span></h3>
-          <p>Version 1.14i (C natif, 96 Ko, 0 Java). Supporte la compression/création d'archives (-a), la mise à jour (-u) et l'extraction (-x).</p>
+          <h3>lha <span class="status-badge status-ready">Available</span></h3>
+          <p>Version 1.14i (native C, 96 KB, zero Java). Full archive creation (-a), updating (-u), and extraction (-x).</p>
           <pre><code>sudo apt install lha</code></pre>
         </div>
         <div class="tool-box">
-          <h3>pea <span class="status-badge status-wip">En cours</span></h3>
-          <p>Portage complet du moteur PEA en C pur, ultra-léger et haute performance, en remplacement du binaire Pascal historique.</p>
+          <h3>pea <span class="status-badge status-wip">In Development</span></h3>
+          <p>Complete pure C rewrite of the PEA engine, ultra-lightweight and fast, replacing the legacy Pascal binary.</p>
         </div>
         <div class="tool-box">
-          <h3>uharc <span class="status-badge status-wip">En cours</span></h3>
-          <p>Moteur UHARC 0.6b réimplémenté en C natif par rétro-ingénierie légale (compression et décompression ALZ).</p>
+          <h3>uharc <span class="status-badge status-wip">In Development</span></h3>
+          <p>Native C UHARC 0.6b engine re-implemented via European interoperability reverse-engineering (ALZ compression &amp; extraction).</p>
         </div>
       </div>
     </div>
 
     <div class="card">
-      <h2>🔍 Transparence et Compilation depuis les Sources</h2>
-      <p>Toutes les sources C des outils packagés sont incluses dans ce dépôt. Pour recompiler localement n'importe quel paquet :</p>
+      <h2>🔍 Source Code &amp; Reproducible Builds</h2>
+      <p>All packaged tools include their full C source code in this repository. To rebuild any package locally from source:</p>
       <pre><code>git clone https://github.com/seb3773/tdezip-tools.git
 cd tdezip-tools/lha
 ./build_deb.sh</code></pre>
     </div>
 
     <footer>
-      <p>Projet TdeZip &bull; Développé pour Trinity Desktop Environment (TDE) &bull; <a href="https://github.com/seb3773/tdezip-tools" target="_blank">Code source sur GitHub</a></p>
+      <p>TdeZip Project &bull; Built for Trinity Desktop Environment (TDE) &bull; <a href="https://github.com/seb3773/tdezip-tools" target="_blank">Source code on GitHub</a></p>
     </footer>
   </div>
 </body>
