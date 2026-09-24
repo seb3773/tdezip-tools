@@ -2,11 +2,11 @@
 
 Official APT repository and source tree for custom companion compression and archiving engines for **TdeZip** (TDE Archive Manager).
 
-🌐 **Repository Portal / GitHub Pages**: [https://seb3773.github.io/tdezip-tools/](https://seb3773.github.io/tdezip-tools/)
+**Repository Portal / GitHub Pages**: [https://seb3773.github.io/tdezip-tools/](https://seb3773.github.io/tdezip-tools/)
 
 ---
 
-## 📦 APT Configuration
+## APT Configuration
 
 Add the repository to your system sources:
 
@@ -23,17 +23,17 @@ sudo apt-get install lha
 
 ---
 
-## 🛠️ Available and Upcoming Tools
+## Available and Upcoming Tools
 
 | Tool | Version | Status | Description |
 | :--- | :--- | :--- | :--- |
-| **`lha`** | 1.14i-11 | ✅ Available | Pure native C LHA/LZH archiver (96 KB binary, zero dependencies, zero Java). Supports creation (`-a`), update (`-u`), extraction (`-x`), and testing (`-t`). |
-| **`pea`** | 1.0 (C) | 🚧 In Progress | Lightweight, pure C port of the PEA format engine, replacing the legacy FreePascal binary. |
-| **`uharc`** | 0.6b (C) | 🚧 In Progress | Pure native C UHARC archiver re-engineered under EU interoperability law (ALZ decoder & encoder). |
+| **`lha`** | 1.14i-11 | Available | Pure native C LHA/LZH archiver (96 KB binary, zero dependencies, zero Java). Supports creation (`-a`), update (`-u`), extraction (`-x`), and testing (`-t`). |
+| **`pea`** | 1.0 (C) | In Progress | Lightweight, pure C port of the PEA format engine, replacing the legacy FreePascal binary. |
+| **`uharc`** | 0.6b (C) | In Progress | Pure native C UHARC archiver re-engineered under EU interoperability law (ALZ decoder & encoder). |
 
 ---
 
-## 🔍 Full Transparency & Building from Source
+## Source Code & Building from Source
 
 Each tool has its own dedicated directory containing the full C source code and an automated build script:
 
