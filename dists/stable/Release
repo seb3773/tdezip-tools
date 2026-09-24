@@ -1,0 +1,20 @@
+Architectures: amd64
+Codename: stable
+Components: main
+Date: Thu, 24 Sep 2026 14:59:20 +0000
+Description: Dedicated Tools Repository for TdeZip / PeaZip (Trinity Desktop Environment)
+Label: TdeZip-Tools APT Repository
+Origin: TdeZip-Tools
+Suite: stable
+MD5Sum:
+ 054fe347ed1e85b3df9f86192e30ba2d              768 main/binary-amd64/Packages
+ 1fcec48b50d20cfca239ef16370e3c78              529 main/binary-amd64/Packages.gz
+SHA1:
+ 8fad46b96bbaa7a6b734522dfac74cbcb6394651              768 main/binary-amd64/Packages
+ 7d4b2c5a331363b06f96acdaec6c0da653be5d61              529 main/binary-amd64/Packages.gz
+SHA256:
+ 4b1b20b71748dacd6b033877ccc7408d92b6baf0049c0df269b82f3af6e1451f              768 main/binary-amd64/Packages
+ 0f41ad161fcd8c5c65e971a127ec2c35d06eb9ead2290428ea4417f9e0758dea              529 main/binary-amd64/Packages.gz
+SHA512:
+ fc10a761c5092e9f7d31a7392219dd0f9627354e1c9f8cc260aaed428d1dc6e02ae188fd3fa3236a482bb63f9debfeb482a852df6ca5efd2a5c8921ab483ed23              768 main/binary-amd64/Packages
+ 18e17ddacf23bd65b6bf110c8e32c495c854f8c2a9d2397e8d03aaf5e60dea7971312651616db98041298f4a7c2c4a3dd8cd75e93777e6d1275afc666f4e25ed              529 main/binary-amd64/Packages.gz

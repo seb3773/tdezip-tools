@@ -1,0 +1,19 @@
+Package: lha
+Version: 1.14i-1
+Architecture: amd64
+Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
+Depends: libc6 (>= 2.15)
+Provides: lha
+Filename: pool/main/l/lha/lha_1.14i-1_amd64.deb
+Size: 56612
+MD5sum: 9f1e6632896b71bf5469edc513019b87
+SHA1: 1cb92263d220a344304b976cce232978b88a27b7
+SHA256: 820c7b2a44673f94086dbd9bc663876826b5a4facba82873ef5e66db36e781f8
+Section: utils
+Priority: optional
+Description: LHA archive compression and extraction utility (native C)
+ LHa is an archive and compression utility for .lzh and .lha files.
+ Unlike extraction-only tools (like lhasa), this native C package supports
+ full archive creation (-a), updating (-u), testing (-t) and extraction (-x).
+ Compiled for Trinity Desktop Environment (TDE) / TdeZip archiver.
+
