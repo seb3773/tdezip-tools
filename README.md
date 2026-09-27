@@ -32,7 +32,7 @@ sudo apt-get install pea-c
 | Tool | Version | Status | Description |
 | :--- | :--- | :--- | :--- |
 | **`lha`** | 1.14i-11 | Available | Pure native C LHA/LZH archiver (96 KB binary, zero dependencies, zero Java). Supports creation (`-a`), update (`-u`), extraction (`-x`), and testing (`-t`). |
-| **`pea-c`** | 1.0-1 | Available | Dedicated pure native C PEA archiver (52 KB binary, replaces 3 MB FreePascal binary). Supports creation, extraction, testing, listing, AE-EAX encryption, cascades, and multi-volume archives. |
+| **`pea-c`** | 1.0-1 | Available | Dedicated pure native C PEA archiver (52 KB binary, replaces 7 MB FreePascal binary). Supports creation, extraction, testing, listing, AE-EAX encryption, cascades, and multi-volume archives. |
 | **`uharc`** | 0.6b (C) | In Progress | Pure native C UHARC archiver re-engineered under EU interoperability law (ALZ decoder & encoder). |
 
 ---
