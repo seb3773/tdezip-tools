@@ -15,10 +15,14 @@ echo "deb [trusted=yes] https://seb3773.github.io/tdezip-tools/ stable main" | s
 sudo apt-get update
 ```
 
-Install an archive engine (e.g. LHA with full creation support):
+Install archive companion engines:
 
 ```bash
+# Install native C LHA archiver (LZH/LHA):
 sudo apt-get install lha
+
+# Install native C PEA archiver:
+sudo apt-get install pea-c
 ```
 
 ---
@@ -28,7 +32,7 @@ sudo apt-get install lha
 | Tool | Version | Status | Description |
 | :--- | :--- | :--- | :--- |
 | **`lha`** | 1.14i-11 | Available | Pure native C LHA/LZH archiver (96 KB binary, zero dependencies, zero Java). Supports creation (`-a`), update (`-u`), extraction (`-x`), and testing (`-t`). |
-| **`pea`** | 1.0 (C) | In Progress | Lightweight, pure C port of the PEA format engine, replacing the legacy FreePascal binary. |
+| **`pea-c`** | 1.0-1 | Available | Dedicated pure native C PEA archiver (52 KB binary, replaces 3 MB FreePascal binary). Supports creation, extraction, testing, listing, AE-EAX encryption, cascades, and multi-volume archives. |
 | **`uharc`** | 0.6b (C) | In Progress | Pure native C UHARC archiver re-engineered under EU interoperability law (ALZ decoder & encoder). |
 
 ---
@@ -38,8 +42,11 @@ sudo apt-get install lha
 Each tool has its own dedicated directory containing the full C source code and an automated build script:
 
 ```bash
-cd lha
-./build_deb.sh
+# Build LHA:
+cd lha && ./build_deb.sh && cd ..
+
+# Build PEA-C:
+cd pea-c && ./build_deb.sh && cd ..
 ```
 
 To refresh the APT repository index after adding or updating packages:
