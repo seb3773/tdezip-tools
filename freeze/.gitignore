@@ -1,0 +1,6 @@
+*.o
+freeze
+statist
+showhuf
+*.deb
+pkg_root/
