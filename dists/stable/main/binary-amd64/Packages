@@ -37,6 +37,26 @@ Description: LHA archive compression and extraction utility (native C)
  full archive creation (-a), updating (-u), testing (-t) and extraction (-x).
  Compiled for Trinity Desktop Environment (TDE) / TdeZip archiver.
 
+Package: lzfse
+Version: 1.0-1
+Architecture: amd64
+Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
+Depends: libc6 (>= 2.15)
+Provides: lzfse
+Filename: pool/main/l/lzfse/lzfse_1.0-1_amd64.deb
+Size: 21736
+MD5sum: d4e40cfac7366d6023a8386cd3e3063d
+SHA1: 0e63e52b6374a76de7e2e4cebb40feffd8d76e03
+SHA256: 6fb09b2a63438b306f5b894b67ad81af6b10302fcaeda3fd878b955caca6899a
+Section: utils
+Priority: optional
+Description: Apple LZFSE lossless data compression utility
+ LZFSE is a high-speed lossless data compression algorithm developed by
+ Apple Inc. using Lempel-Ziv sliding window and Finite State Entropy (FSE).
+ It provides compression ratios comparable to Deflate/zlib while offering
+ 2x to 3x higher throughput with low energy consumption.
+ Packaged for Trinity Desktop Environment (TDE) / TdeZip companion tools.
+
 Package: lzham
 Version: 1.0-1
 Architecture: amd64

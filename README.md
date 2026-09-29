@@ -35,6 +35,9 @@ sudo apt-get install lzham
 
 # Install Historic Unix Pack / Unpack / Pcat (.z):
 sudo apt-get install pack
+
+# Install Apple LZFSE compressor:
+sudo apt-get install lzfse
 ```
 
 ---
@@ -49,6 +52,7 @@ sudo apt-get install pack
 | **`zoo`** | 2.10-28 | Available | Rahul Dhesi's classic ZOO archiver and repair suite (64 KB deb, `zoo` + `fiz`). Supports creation, extraction, testing, comments, multi-generations, and damaged archive recovery. |
 | **`lzham`** | 1.0-1 | Available | Richard Geldreich's high-ratio LZ compressor (82 KB deb, `/usr/bin/lzham`). LZMA-class ratios with faster decompression, dictionaries up to 512 MB, multi-threading, Tar pipelines (`.tar.lzham`) and integrity verification. |
 | **`pack`** | 1.0-1 | Available | Historical Unix Huffman compressor and decompressor suite (32 KB deb, `pack`, `unpack`, `pcat`). Authentic Research Unix V8 / System V algorithm modernized for 64-bit POSIX, full `.z` creation, extraction and test support. |
+| **`lzfse`** | 1.0-1 | Available | Apple LZFSE lossless compressor (43 KB deb, `/usr/bin/lzfse`). High-speed LZ + Finite State Entropy algorithm, ratio comparable to Deflate/zlib with 2-3x faster throughput. Full support for `.lzfse` and `.tar.lzfse` / `.tlzfse`. |
 | **`uharc`** | 0.6b (C) | In Progress | Pure native C UHARC archiver re-engineered under EU interoperability law (ALZ decoder & encoder). |
 
 ---
@@ -75,6 +79,9 @@ cd lzham && ./build_deb.sh && cd ..
 
 # Build Pack:
 cd pack && ./build_deb.sh && cd ..
+
+# Build LZFSE:
+cd lzfse && ./build_deb.sh && cd ..
 ```
 
 To refresh the APT repository index after adding or updating packages:

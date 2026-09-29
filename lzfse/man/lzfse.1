@@ -1,0 +1,50 @@
+.TH LZFSE 1 "September 2026" "TdeZip Tools" "User Commands"
+.SH NAME
+lzfse \- LZFSE lossless data compression utility
+.SH SYNOPSIS
+.B lzfse
+[\fB\-encode\fR|\fB\-decode\fR|\fB\-d\fR|\fB\-t\fR] [\fB\-i\fR \fIinput\fR] [\fB\-o\fR \fIoutput\fR] [\fB\-v\fR]
+.br
+.B lzfse
+[\fB\-d\fR|\fB\-t\fR] [\fIinput\fR] [\fB\-o\fR \fIoutput\fR]
+.SH DESCRIPTION
+.B lzfse
+is a lossless data compression tool using the LZFSE algorithm developed by Apple Inc.
+It combines a Lempel-Ziv sliding window technique with Finite State Entropy (FSE) coding.
+It provides compression ratios comparable to Deflate/zlib while offering significantly
+faster compression and decompression speeds with lower energy consumption.
+.PP
+When used without arguments or in pipelines,
+.B lzfse
+reads from standard input and writes to standard output, making it suitable for use
+with GNU
+.BR tar (1)
+via the \fB\-\-use\-compress\-program\fR option.
+.SH OPTIONS
+.TP
+.B \-encode, \-c, \-z
+Compress the input data.
+.TP
+.B \-decode, \-d, \-\-decompress
+Decompress the input data.
+.TP
+.B \-t, \-\-test
+Test the integrity of the compressed file without writing output to disk.
+.TP
+.B \-i \fIfile\fR
+Specify input file (defaults to standard input).
+.TP
+.B \-o \fIfile\fR
+Specify output file (defaults to standard output).
+.TP
+.B \-f, \-\-force
+Force overwrite of existing output files.
+.TP
+.B \-v, \-\-verbose
+Display compression statistics and throughput.
+.TP
+.B \-h, \-\-help
+Display command usage summary.
+.SH AUTHORS
+Written by Apple Inc.
+Packaged and enhanced for Trinity Desktop Environment (TDE) / TdeZip companion tools.
