@@ -308,30 +308,80 @@ bool RunDecompression(const std::string& input_path,
 }
 
 int main(int argc, char* argv[]) {
-  if (argc == 2) {
-    if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
+  char mode = 0; // 'c', 'd', 'n', 's', 't'
+  bool to_stdout = false;
+  bool force = false;
+  bool keep = false;
+  std::string dict_file;
+  std::vector<std::string> positional;
+
+  for (int i = 1; i < argc; ++i) {
+    std::string arg = argv[i];
+    if (arg == "-h" || arg == "--help") {
       return Help(0);
-    }
-    if (strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "-V") == 0 || strcmp(argv[1], "--version") == 0) {
+    } else if (arg == "-v" || arg == "-V" || arg == "--version") {
       printf("cmix version 21\n");
       return 0;
+    } else if (arg == "-d" || arg == "--decompress" || arg == "-x" || arg == "--extract") {
+      mode = 'd';
+    } else if (arg == "-t" || arg == "--test") {
+      mode = 't';
+    } else if (arg == "-c") {
+      // In native cmix, -c is compress mode when 2 files are given.
+      // If we see -d already set, -c means to_stdout.
+      if (mode == 'd') {
+        to_stdout = true;
+      } else {
+        if (mode == 0) mode = 'c';
+      }
+    } else if (arg == "--stdout") {
+      to_stdout = true;
+    } else if (arg == "-n") {
+      mode = 'n';
+    } else if (arg == "-s") {
+      mode = 's';
+    } else if (arg == "-f" || arg == "--force") {
+      force = true;
+    } else if (arg == "-k" || arg == "--keep") {
+      keep = true;
+    } else if (arg == "-D" && i + 1 < argc) {
+      dict_file = argv[++i];
+    } else if (arg.rfind("-D", 0) == 0 && arg.length() > 2) {
+      dict_file = arg.substr(2);
+    } else if (!arg.empty() && arg[0] == '-' && arg != "-") {
+      // ignore other flags
+    } else {
+      positional.push_back(arg);
     }
   }
 
-  // Archive integrity test mode: cmix -t <archive> or cmix -t <dictionary> <archive>
-  if ((argc == 3 && strcmp(argv[1], "-t") == 0) ||
-      (argc == 4 && strcmp(argv[1], "-t") == 0 && access(argv[3], F_OK) == 0 && access(argv[2], F_OK) == 0)) {
-    FILE* dict = NULL;
-    std::string archive_path;
-    if (argc == 4) {
-      dict = fopen(argv[2], "rb");
-      if (!dict) return Help(-1);
-      dictionary_path = argv[2];
-      archive_path = argv[3];
-    } else {
-      archive_path = argv[2];
-    }
+  // Handle native 4/5 argument syntax: cmix <mode> <dict> <in> <out>
+  if (dict_file.empty() && positional.size() == 3 && access(positional[0].c_str(), F_OK) == 0) {
+    dict_file = positional[0];
+    positional.erase(positional.begin());
+  }
 
+  if (mode == 0) {
+    mode = 'c';
+  }
+
+  FILE* dict = NULL;
+  if (!dict_file.empty()) {
+    dict = fopen(dict_file.c_str(), "rb");
+    if (!dict) {
+      fprintf(stderr, "cmix: cannot open dictionary '%s'\n", dict_file.c_str());
+      return 1;
+    }
+    dictionary_path = const_cast<char*>(dict_file.c_str());
+  }
+
+  // 1. Archive integrity test mode (-t)
+  if (mode == 't') {
+    if (positional.empty()) {
+      if (dict) fclose(dict);
+      return Help(-1);
+    }
+    std::string archive_path = positional[0];
     char test_template[] = "/tmp/cmix_test_XXXXXX";
     int fd = mkstemp(test_template);
     if (fd == -1) {
@@ -355,40 +405,51 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  // Stdin/stdout pipe support (GNU tar compatibility)
+  // 2. Pipe mode (stdin / stdout)
   bool is_pipe = false;
-  char pipe_mode = 'c';
-  if (argc == 1 && !isatty(fileno(stdin))) {
+  if (positional.empty() && !isatty(fileno(stdin))) {
     is_pipe = true;
-    pipe_mode = 'c';
-  } else if (argc == 2 && !isatty(fileno(stdin)) && (strcmp(argv[1], "-c") == 0 || strcmp(argv[1], "-d") == 0)) {
+  } else if (to_stdout) {
     is_pipe = true;
-    pipe_mode = argv[1][1];
-  } else if (argc == 3 && strcmp(argv[2], "-") == 0) {
+  } else if (positional.size() == 1 && positional[0] == "-") {
     is_pipe = true;
-    pipe_mode = argv[1][1];
+  } else if (positional.size() >= 2 && positional.back() == "-") {
+    is_pipe = true;
   }
 
   if (is_pipe) {
-    char in_template[] = "/tmp/cmix_pipe_in_XXXXXX";
-    int in_fd = mkstemp(in_template);
-    if (in_fd == -1) return 1;
+    std::string in_file;
+    bool remove_in = false;
 
-    char buf[65536];
-    ssize_t bytes_read;
-    while ((bytes_read = read(STDIN_FILENO, buf, sizeof(buf))) > 0) {
-      if (write(in_fd, buf, bytes_read) != bytes_read) {
-        close(in_fd);
-        unlink(in_template);
+    if (!positional.empty() && positional[0] != "-") {
+      in_file = positional[0];
+    } else {
+      char in_template[] = "/tmp/cmix_pipe_in_XXXXXX";
+      int in_fd = mkstemp(in_template);
+      if (in_fd == -1) {
+        if (dict) fclose(dict);
         return 1;
       }
+      char buf[65536];
+      ssize_t bytes_read;
+      while ((bytes_read = read(STDIN_FILENO, buf, sizeof(buf))) > 0) {
+        if (write(in_fd, buf, bytes_read) != bytes_read) {
+          close(in_fd);
+          unlink(in_template);
+          if (dict) fclose(dict);
+          return 1;
+        }
+      }
+      close(in_fd);
+      in_file = in_template;
+      remove_in = true;
     }
-    close(in_fd);
 
     char out_template[] = "/tmp/cmix_pipe_out_XXXXXX";
     int out_fd = mkstemp(out_template);
     if (out_fd == -1) {
-      unlink(in_template);
+      if (remove_in) unlink(in_file.c_str());
+      if (dict) fclose(dict);
       return 1;
     }
     close(out_fd);
@@ -396,12 +457,16 @@ int main(int argc, char* argv[]) {
     std::string temp_path = std::string(out_template) + ".cmix.temp";
     unsigned long long in_b = 0, out_b = 0;
     bool ok = false;
-    if (pipe_mode == 'c') {
-      ok = RunCompression(true, false, in_template, temp_path, out_template, NULL, &in_b, &out_b);
+    if (mode == 'd') {
+      ok = RunDecompression(in_file, temp_path, out_template, dict, &in_b, &out_b);
     } else {
-      ok = RunDecompression(in_template, temp_path, out_template, NULL, &in_b, &out_b);
+      bool enable_preprocess = (mode != 'n');
+      bool text_mode = (mode == 's');
+      ok = RunCompression(enable_preprocess, text_mode, in_file, temp_path, out_template, dict, &in_b, &out_b);
     }
-    unlink(in_template);
+
+    if (remove_in) unlink(in_file.c_str());
+    if (dict) fclose(dict);
 
     if (!ok) {
       unlink(out_template);
@@ -410,6 +475,8 @@ int main(int argc, char* argv[]) {
 
     int read_out_fd = open(out_template, O_RDONLY);
     if (read_out_fd != -1) {
+      char buf[65536];
+      ssize_t bytes_read;
       while ((bytes_read = read(read_out_fd, buf, sizeof(buf))) > 0) {
         if (write(STDOUT_FILENO, buf, bytes_read) != bytes_read) break;
       }
@@ -419,64 +486,54 @@ int main(int argc, char* argv[]) {
     return 0;
   }
 
-  if (argc < 4 || argc > 5 || strlen(argv[1]) != 2 || argv[1][0] != '-' ||
-      (argv[1][1] != 'c' && argv[1][1] != 'd' && argv[1][1] != 's' &&
-      argv[1][1] != 'n' && argv[1][1] != 't')) {
+  // 3. File arguments mode
+  if (positional.empty()) {
+    if (dict) fclose(dict);
     return Help(-1);
   }
 
-  clock_t start = clock();
+  std::string input_path = positional[0];
+  std::string output_path;
 
-  bool enable_preprocess = true;
-  bool text_mode = false;
-  if (argv[1][1] == 'n') enable_preprocess = false;
-  std::string input_path = argv[2];
-  std::string output_path = argv[3];
-  FILE* dictionary = NULL;
-  if (argc == 5) {
-    if (argv[1][1] == 'n') return Help(-1);
-    if (argv[1][1] == 't') text_mode = true;
-    dictionary = fopen(argv[2], "rb");
-    if (!dictionary) return Help(-1);
-    dictionary_path = argv[2];
-    input_path = argv[3];
-    output_path = argv[4];
+  if (positional.size() == 1) {
+    if (mode == 'd') {
+      if (input_path.length() > 5 && input_path.substr(input_path.length() - 5) == ".cmix") {
+        output_path = input_path.substr(0, input_path.length() - 5);
+      } else {
+        output_path = input_path + ".out";
+      }
+    } else {
+      output_path = input_path + ".cmix";
+    }
   } else {
-    if (argv[1][1] == 't') return Help(-1);
+    output_path = positional[1];
+  }
+
+  if (!force && access(output_path.c_str(), F_OK) == 0 && positional.size() == 1) {
+    fprintf(stderr, "cmix: output file '%s' already exists (use -f to force)\n", output_path.c_str());
+    if (dict) fclose(dict);
+    return 1;
   }
 
   std::string temp_path = output_path + ".cmix.temp";
+  unsigned long long in_b = 0, out_b = 0;
+  bool ok = false;
 
-  unsigned long long input_bytes = 0, output_bytes = 0;
-
-  if (argv[1][1] == 's') {
-    if (!Store(input_path, temp_path, output_path, dictionary, &input_bytes,
-        &output_bytes)) {
-      return Help(-1);
-    }
-  } else if (argv[1][1] == 'c' || argv[1][1] == 'n' || argv[1][1] == 't') {
-    if (!RunCompression(enable_preprocess, text_mode, input_path, temp_path,
-        output_path, dictionary, &input_bytes, &output_bytes)) {
-      return Help(-1);
-    }
+  if (mode == 'd') {
+    ok = RunDecompression(input_path, temp_path, output_path, dict, &in_b, &out_b);
   } else {
-    if (!RunDecompression(input_path, temp_path, output_path, dictionary,
-        &input_bytes, &output_bytes)) {
-      return Help(-1);
+    bool enable_preprocess = (mode != 'n');
+    bool text_mode = (mode == 's');
+    ok = RunCompression(enable_preprocess, text_mode, input_path, temp_path, output_path, dict, &in_b, &out_b);
+  }
+
+  if (dict) fclose(dict);
+
+  if (ok) {
+    if (positional.size() == 1 && !keep) {
+      unlink(input_path.c_str());
     }
+    return 0;
   }
-
-  printf("\r%lld bytes -> %lld bytes in %1.2f s.\n",
-      input_bytes, output_bytes,
-      ((double)clock() - start) / CLOCKS_PER_SEC);
-
-  if (argv[1][1] == 'c') {
-    double cross_entropy = output_bytes;
-    cross_entropy /= input_bytes;
-    cross_entropy *= 8;
-    printf("cross entropy: %.3f\n", cross_entropy);
-  }
-
-  if (dictionary) fclose(dictionary);
-  return 0;
+  return 1;
 }

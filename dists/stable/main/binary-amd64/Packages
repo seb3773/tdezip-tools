@@ -5,10 +5,10 @@ Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
 Depends: libc6 (>= 2.34), libstdc++6 (>= 11)
 Provides: cmix
 Filename: pool/main/c/cmix/cmix_21-1_amd64.deb
-Size: 450816
-MD5sum: b2b543b4f83db2e107f851fb8afff0a1
-SHA1: 96261420fcaf1563cee12d4e18932640027a368c
-SHA256: a70704b9defbc9224738f662f29e32efcb1ac5cf9c4aac5c18163774b335b87f
+Size: 452804
+MD5sum: 7deb0b59f13ed8387b09d50715a70c91
+SHA1: 0d2246aa9445f1f2e8cca471eeb43151f75fa1c0
+SHA256: 0edfc918aad5364fd962fe0a99af8debed86d62174e97342aba0484e163fb169
 Section: utils
 Priority: optional
 Description: Extreme lossless data compression program using context mixing
