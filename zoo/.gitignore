@@ -1,0 +1,6 @@
+pkg_root/
+zoo
+fiz
+*.deb
+*.o
+*.a

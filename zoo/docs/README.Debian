@@ -1,0 +1,15 @@
+zoo for Debian
+--------------
+
+The linux target I created was based on the bsd 4.3 target, with the
+following differences :-
+
+     Linux has strchr().
+     Linux signal handler returns void data type.
+     (Debian GNU/)Linux uses stdarg.h in preference to varags.h.
+     Linux has memmove().
+     (Debian GNU/)Linux uses ansi C compilers (required for stdarg.h).
+     Linux malloc() returns a void pointer.
+     Linux has vprintf().
+
+ -- Jose Carlos Medeiros <debian@psabs.com.br>  Sat, 22 Mar 2008 15:19:10 -0300

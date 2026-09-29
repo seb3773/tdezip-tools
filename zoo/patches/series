@@ -1,0 +1,12 @@
+01-old-fixes.patch
+02-traversal-directory.patch
+03-fix-manage-archive-under-AMD64.patch
+04-fix-fullpath-buffer-overflow.patch
+05-CVE-2006-1269.patch
+06-CVE-2007-1673.patch
+07-ms-help-reduce-outputted-newlines-in-help.patch
+08-wait-return-comment-out.patch
+10-printf.patch
+12-printf.patch
+14-printf.patch
+20-makefile.patch

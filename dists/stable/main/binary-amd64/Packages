@@ -58,3 +58,24 @@ Description: PEA archive format compression and extraction engine (native C)
  (CRC32, SHA256, Adler32, Blake2...), authenticated encryption
  (EAX, EAX256, HMAC, Twofish, Serpent, cascades), keyfiles, and multi-volume archives.
 
+Package: zoo
+Version: 2.10-28
+Architecture: amd64
+Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
+Depends: libc6 (>= 2.14)
+Provides: zoo, fiz
+Filename: pool/main/z/zoo/zoo_2.10-28_amd64.deb
+Size: 65464
+MD5sum: 9c0eac4ee8a74d3f091d5c8265e823ca
+SHA1: 31dbf995a0df3c0095fc500d029e35c45d790f50
+SHA256: 0c0b9d749a912d1a35aa9a5318e061639d9eace218a5478becbc54b1b6ab9fd0
+Section: utils
+Priority: optional
+Description: Rahul Dhesi ZOO archive manipulation and recovery tool
+ Zoo is used to create and maintain collections of files in compressed
+ form using Lempel-Ziv compression (LZW) with support for generations,
+ full path preservation, comments and integrity checking.
+ Includes 'fiz' for repairing and analyzing damaged zoo archives.
+ Packaged with POSIX and 64-bit security patches for Trinity Desktop
+ Environment (TDE) / TdeZip companion tools.
+
