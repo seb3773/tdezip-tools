@@ -47,6 +47,9 @@ sudo apt-get install density
 
 # Install Byron Knoll CMIX compressor:
 sudo apt-get install cmix
+
+# Install Matthias Stirner & Sebastian Lehmann packARC archiver:
+sudo apt-get install packarc
 ```
 
 ---
@@ -65,6 +68,7 @@ sudo apt-get install cmix
 | **`lzav`** | 1.0-1 | Available | Aleksey Vaneev LZAV in-memory LZ77 compressor (31 KB deb, `/usr/bin/lzav`). Ultra-fast multi-GB/s decompression, streaming CRC32 framing, full support for `.lzav` and `.tar.lzav` / `.tlzav`. |
 | **`density`** | 1.0-1 | Available | Guillaume Vaudaux Density compressor (38 KB deb, `/usr/bin/density`). Ultra-fast 4-byte work units, 3 algorithms (Chameleon, Cheetah, Lion), streaming CRC32 framing, full support for `.density` and `.tar.density` / `.tdensity`. |
 | **`cmix`** | 21-1 | Available | Byron Knoll extreme context-mixing compressor (441 KB deb, `/usr/bin/cmix`). World-class compression ratio (PPM, PAQ8, indirect hashes, LSTM neural network). Full support for `.cmix` and `.tar.cmix` / `.tcmix`, streaming Tar pipelines, and archive integrity testing (-t). |
+| **`packarc`** | 0.7-1 | Available | Matthias Stirner & Sebastian Lehmann multi-algorithm multimedia archiver (212 KB deb, `/usr/bin/packARC`). Lossless re-compression of JPEG (~20%), MP3 (~16%), PNM/PPM/PGM, and general files via packARI. Full creation, extraction (`-C`), listing (`-csv`), integrity testing, and SFX archives (`.pja`). |
 | **`uharc`** | 0.6b (C) | In Progress | Pure native C UHARC archiver re-engineered under EU interoperability law (ALZ decoder & encoder). |
 
 ---
@@ -103,6 +107,9 @@ cd density && ./build_deb.sh && cd ..
 
 # Build CMIX:
 cd cmix && ./build_deb.sh && cd ..
+
+# Build packARC:
+cd packarc && ./build_deb.sh && cd ..
 ```
 
 To refresh the APT repository index after adding or updating packages:
