@@ -1,3 +1,24 @@
+Package: density
+Version: 1.0-1
+Architecture: amd64
+Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
+Depends: libc6 (>= 2.15)
+Provides: density
+Filename: pool/main/d/density/density_1.0-1_amd64.deb
+Size: 22888
+MD5sum: 3f224c276c127357bfe64368bb186587
+SHA1: dac809df6278fd544b7b0157e9a606ab076280a0
+SHA256: ac8033451ce7cc3b073b6fad33e81a878e5dfe625f372fe361506430ccdbe892
+Section: utils
+Priority: optional
+Description: Ultra-fast lossless data compression utility
+ Density is an ultra-fast lossless data compression library and utility
+ developed by Guillaume Vaudaux. Operating on 4-byte work units, it features
+ three distinct algorithms (Chameleon, Cheetah, and Lion) delivering multi-gigabyte
+ per second throughput while achieving balanced to high compression ratios.
+ Framed in 2 MB streaming chunks with per-block IEEE 802.3 CRC32 verification.
+ Packaged for Trinity Desktop Environment (TDE) / TdeZip companion tools.
+
 Package: freeze
 Version: 2.5.0-1
 Architecture: amd64

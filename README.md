@@ -41,6 +41,9 @@ sudo apt-get install lzfse
 
 # Install Aleksey Vaneev LZAV compressor:
 sudo apt-get install lzav
+
+# Install Guillaume Vaudaux Density compressor:
+sudo apt-get install density
 ```
 
 ---
@@ -57,6 +60,7 @@ sudo apt-get install lzav
 | **`pack`** | 1.0-1 | Available | Historical Unix Huffman compressor and decompressor suite (32 KB deb, `pack`, `unpack`, `pcat`). Authentic Research Unix V8 / System V algorithm modernized for 64-bit POSIX, full `.z` creation, extraction and test support. |
 | **`lzfse`** | 1.0-1 | Available | Apple LZFSE lossless compressor (43 KB deb, `/usr/bin/lzfse`). High-speed LZ + Finite State Entropy algorithm, ratio comparable to Deflate/zlib with 2-3x faster throughput. Full support for `.lzfse` and `.tar.lzfse` / `.tlzfse`. |
 | **`lzav`** | 1.0-1 | Available | Aleksey Vaneev LZAV in-memory LZ77 compressor (31 KB deb, `/usr/bin/lzav`). Ultra-fast multi-GB/s decompression, streaming CRC32 framing, full support for `.lzav` and `.tar.lzav` / `.tlzav`. |
+| **`density`** | 1.0-1 | Available | Guillaume Vaudaux Density compressor (38 KB deb, `/usr/bin/density`). Ultra-fast 4-byte work units, 3 algorithms (Chameleon, Cheetah, Lion), streaming CRC32 framing, full support for `.density` and `.tar.density` / `.tdensity`. |
 | **`uharc`** | 0.6b (C) | In Progress | Pure native C UHARC archiver re-engineered under EU interoperability law (ALZ decoder & encoder). |
 
 ---
@@ -89,6 +93,9 @@ cd lzfse && ./build_deb.sh && cd ..
 
 # Build LZAV:
 cd lzav && ./build_deb.sh && cd ..
+
+# Build Density:
+cd density && ./build_deb.sh && cd ..
 ```
 
 To refresh the APT repository index after adding or updating packages:

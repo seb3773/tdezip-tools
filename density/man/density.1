@@ -1,0 +1,60 @@
+.TH DENSITY 1 "September 2026" "density 1.0" "User Commands"
+.SH NAME
+density \- fast lossless data compression and decompression utility
+.SH SYNOPSIS
+.B density
+[\fIOPTIONS\fR] [\fIFILES\fR...]
+.SH DESCRIPTION
+.B density
+is an extremely fast lossless data compression utility based on Guillaume Vaudaux's
+Density library. It operates using 4-byte work units and offers three distinct
+algorithms (Chameleon, Cheetah, and Lion) balancing ultra-fast throughput (GB/s)
+and high compression ratio.
+
+Density files are framed in 2 MB streaming blocks protected with IEEE 802.3 CRC32
+checksums, providing immediate corruption detection and full compatibility with
+Unix pipelines and GNU tar.
+
+.SH OPTIONS
+.TP
+\fB\-c\fR, \fB\-\-stdout\fR
+Write output on standard output, keep original input files.
+.TP
+\fB\-d\fR, \fB\-\-decompress\fR
+Decompress the specified files.
+.TP
+\fB\-t\fR, \fB\-\-test\fR
+Test the integrity of compressed files using CRC32 checksums without writing to disk.
+.TP
+\fB\-i\fR \fIFILE\fR, \fB\-\-input\fR \fIFILE\fR
+Specify explicit input file path.
+.TP
+\fB\-o\fR \fIFILE\fR, \fB\-\-output\fR \fIFILE\fR
+Specify explicit output file path.
+.TP
+\fB\-f\fR, \fB\-\-force\fR
+Force overwrite of output files without prompting.
+.TP
+\fB\-k\fR, \fB\-\-keep\fR
+Keep (do not delete) input files during operation (default).
+.TP
+\fB\-1\fR, \fB\-\-chameleon\fR
+Select Chameleon algorithm (fastest, dictionary lookup based, GB/s order).
+.TP
+\fB\-2\fR, \fB\-\-cheetah\fR
+Select Cheetah algorithm (balanced speed/ratio, dual swapped dictionary + prediction, default).
+.TP
+\fB\-3\fR, \fB\-9\fR, \fB\-\-lion\fR, \fB\-\-best\fR
+Select Lion algorithm (highest compression ratio, multi-form rank entropy).
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Verbose mode, displays compression statistics and transfer speeds.
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Display version information and exit.
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Display usage summary and exit.
+
+.SH AUTHORS
+Written by Guillaume Vaudaux (library core) and packaged for TDE / TdeZip companion tools.
