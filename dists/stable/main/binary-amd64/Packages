@@ -5,10 +5,10 @@ Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
 Depends: libc6 (>= 2.15)
 Provides: freeze, melt
 Filename: pool/main/f/freeze/freeze_2.5.0-1_amd64.deb
-Size: 23084
-MD5sum: f31f038ae8dec2dd8cf4607a26dd45ee
-SHA1: c519e59cbae96b859285d8c22bd82e7c6c5aa8b6
-SHA256: 93d0d0884407ca2338c68b9d6ca3e364f0176d9474cb8abf834e134bc9b9ac8a
+Size: 23068
+MD5sum: b6a8fcd0bf2df60825dd8825f6f91ade
+SHA1: 2438f7d89e4fde02b2a19a5d4e9a1662ca01fadd
+SHA256: d7d9402cf1f95b3bcbb4a623a123941a11af2e92a8d277482d81a71d9144b1aa
 Section: utils
 Priority: optional
 Description: Freeze and melt compression / decompression utility

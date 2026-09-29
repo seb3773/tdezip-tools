@@ -29,15 +29,12 @@ if [ -f "${SCRIPT_DIR}/statist" ]; then
     chmod 755 "${PKG_DIR}/usr/bin/statist"
 fi
 
-# Symlinks for melt, fcat and unfreeze
 ln -s freeze "${PKG_DIR}/usr/bin/melt"
-ln -s freeze "${PKG_DIR}/usr/bin/fcat"
 ln -s freeze "${PKG_DIR}/usr/bin/unfreeze"
 
 # Manpages
 gzip -9c "${SCRIPT_DIR}/man/freeze.1" > "${PKG_DIR}/usr/share/man/man1/freeze.1.gz"
 ln -s freeze.1.gz "${PKG_DIR}/usr/share/man/man1/melt.1.gz"
-ln -s freeze.1.gz "${PKG_DIR}/usr/share/man/man1/fcat.1.gz"
 if [ -f "${SCRIPT_DIR}/man/statist.1" ]; then
     gzip -9c "${SCRIPT_DIR}/man/statist.1" > "${PKG_DIR}/usr/share/man/man1/statist.1.gz"
 fi
