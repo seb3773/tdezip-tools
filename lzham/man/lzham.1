@@ -1,0 +1,50 @@
+.TH LZHAM 1 "September 2026" "LZHAM 1.0" "User Commands"
+.SH NAME
+lzham \- high-ratio LZ compression utility
+.SH SYNOPSIS
+.B lzham
+[\fIOPTIONS\fR] [\fIFILE...\fR]
+.br
+.B lzham
+.B c
+[\fIOPTIONS\fR] \fIINPUT\fR \fIOUTPUT\fR
+.br
+.B lzham
+.B d
+[\fIOPTIONS\fR] \fIINPUT\fR \fIOUTPUT\fR
+.SH DESCRIPTION
+.B lzham
+is a high-ratio lossless data compression tool created by Richard Geldreich.
+It achieves high compression ratios comparable to LZMA while providing faster
+decompression speeds and support for dictionaries up to 512 MB.
+.SH OPTIONS
+.TP
+.BR \-c ", " \-\-stdout
+Write output on standard output; keep original files unchanged.
+.TP
+.BR \-d ", " \-\-decompress
+Decompress files.
+.TP
+.BR \-t ", " \-\-test
+Test archive integrity using embedded Adler-32 checksums.
+.TP
+.BR \-f ", " \-\-force
+Force overwrite of output files without prompting.
+.TP
+.BR \-k ", " \-\-keep
+Keep (do not delete) input files.
+.TP
+.BI \-m level
+Set compression level from 0 (fastest) to 4 (uber). Default is 2.
+.TP
+.BI \-d dict
+Set log2 dictionary size from 15 (32 KB) to 29 (512 MB). Default is 26 (64 MB).
+.TP
+.BR \-q ", " \-\-quiet
+Suppress non-essential messages.
+.TP
+.BR \-h ", " \-\-help
+Display command-line help.
+.SH AUTHORS
+Written by Richard Geldreich, Jr.
+Packaged for Trinity Desktop Environment (TDE) / TdeZip.

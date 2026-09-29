@@ -1,0 +1,6 @@
+pkg_root/
+lzham
+*.deb
+*.o
+*.a
+tests/tmp_test/
