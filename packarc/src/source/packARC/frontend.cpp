@@ -10,7 +10,7 @@
 #define OUTPUT_ENGINE_INFO
 
 #define BARLEN 36
-#define MSGOUT stderr
+#define MSGOUT stdout
 
 // application info variables
 const unsigned char appversion   = 7; // should be same as packARC library version

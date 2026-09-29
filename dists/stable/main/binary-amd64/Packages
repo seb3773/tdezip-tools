@@ -165,10 +165,10 @@ Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
 Depends: libc6 (>= 2.15), libstdc++6 (>= 4.6)
 Provides: packarc
 Filename: pool/main/p/packarc/packarc_0.7-1_amd64.deb
-Size: 216636
-MD5sum: 6cc051477a7b912cb833588936fc1180
-SHA1: 6051133e98b6610296169e04fb4e1390dc350693
-SHA256: 1ea5066debd367c84419fb0e7519af0363a6df3fa4cbf30524c3aae03853d60c
+Size: 216400
+MD5sum: 9713875029ce2a38bb79a923471b2a2a
+SHA1: 505c5f337614281bafc8287564b9455f25e23811
+SHA256: a416e0249fd0425a48433e80ff3796de433dbecb141e45d0c1d786f308c9644a
 Section: utils
 Priority: optional
 Description: Multi-algorithm archiver specialized in lossless compression of JPEG, MP3, and PNM
