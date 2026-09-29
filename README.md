@@ -32,6 +32,9 @@ sudo apt-get install zoo
 
 # Install LZHAM high-ratio compressor:
 sudo apt-get install lzham
+
+# Install Historic Unix Pack / Unpack / Pcat (.z):
+sudo apt-get install pack
 ```
 
 ---
@@ -45,6 +48,7 @@ sudo apt-get install lzham
 | **`freeze`** | 2.5.0-1 | Available | Historic Unix Freeze / Melt compressor (23 KB binary). Supports creation, extraction, and testing for `.F` and `.tar.F` (LZSS + Dynamic Huffman). |
 | **`zoo`** | 2.10-28 | Available | Rahul Dhesi's classic ZOO archiver and repair suite (64 KB deb, `zoo` + `fiz`). Supports creation, extraction, testing, comments, multi-generations, and damaged archive recovery. |
 | **`lzham`** | 1.0-1 | Available | Richard Geldreich's high-ratio LZ compressor (82 KB deb, `/usr/bin/lzham`). LZMA-class ratios with faster decompression, dictionaries up to 512 MB, multi-threading, Tar pipelines (`.tar.lzham`) and integrity verification. |
+| **`pack`** | 1.0-1 | Available | Historical Unix Huffman compressor and decompressor suite (32 KB deb, `pack`, `unpack`, `pcat`). Authentic Research Unix V8 / System V algorithm modernized for 64-bit POSIX, full `.z` creation, extraction and test support. |
 | **`uharc`** | 0.6b (C) | In Progress | Pure native C UHARC archiver re-engineered under EU interoperability law (ALZ decoder & encoder). |
 
 ---
@@ -68,6 +72,9 @@ cd zoo && ./build_deb.sh && cd ..
 
 # Build LZHAM:
 cd lzham && ./build_deb.sh && cd ..
+
+# Build Pack:
+cd pack && ./build_deb.sh && cd ..
 ```
 
 To refresh the APT repository index after adding or updating packages:

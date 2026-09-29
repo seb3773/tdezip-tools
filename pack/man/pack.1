@@ -1,0 +1,51 @@
+.TH PACK 1 "September 2026" "TdeZip Tools" "User Commands"
+.SH NAME
+pack, unpack, pcat \- compress and expand files using Huffman coding
+.SH SYNOPSIS
+.B pack
+[\fB\-f\fR] [\fB\-c\fR] [\fB\-v\fR] \fIfile\fR ...
+.PP
+.B unpack
+[\fB\-f\fR] [\fB\-c\fR] [\fB\-v\fR] \fIfile\fR ...
+.PP
+.B pcat
+[\fIfile\fR ...]
+.SH DESCRIPTION
+.B pack
+compresses the specified files using a two-pass canonical Huffman coding algorithm,
+originally designed by T.G. Szymanski for Research Unix.
+The compressed files are given the suffix
+.B .z
+and retain the access modes, modification dates, and ownership of the original files.
+If compression is successful and \fB\-c\fR is not specified, the original uncompressed
+file is removed.
+.PP
+.B unpack
+restores files previously packed by
+.BR pack .
+The
+.B .z
+suffix may be omitted from input filenames.
+Upon successful decompression, the
+.B .z
+archive is removed (unless \fB\-c\fR is specified).
+.PP
+.B pcat
+decompresses files to standard output without removing the original packed file.
+If no files are specified,
+.B pcat
+reads packed data from standard input.
+.SH OPTIONS
+.TP
+.B \-f, \-\-force
+Force packing even if no file size reduction occurs. When unpacking, overwrite
+existing files without error.
+.TP
+.B \-c, \-\-stdout
+Write compressed or decompressed output to standard output, leaving original files untouched.
+.TP
+.B \-v, \-\-verbose
+Display compression statistics or decompression progress.
+.SH AUTHORS
+Originally written by Thomas G. Szymanski (Bell Laboratories, 1978\(en1979).
+Modernized and packaged for Trinity Desktop Environment (TDE) / TdeZip.

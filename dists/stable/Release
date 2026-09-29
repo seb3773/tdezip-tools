@@ -1,20 +1,20 @@
 Architectures: amd64
 Codename: stable
 Components: main
-Date: Tue, 29 Sep 2026 00:34:37 +0000
+Date: Tue, 29 Sep 2026 01:13:42 +0000
 Description: Dedicated Tools Repository for TdeZip (TDE Archive Manager)
 Label: TdeZip-Tools APT Repository
 Origin: TdeZip-Tools
 Suite: stable
 MD5Sum:
- f23a1678e8dd5b8b6254f482bdb10e19             4324 main/binary-amd64/Packages
- 8b667397f054e44d30b246fbd0fa6367             1880 main/binary-amd64/Packages.gz
+ 637af855a2bab849c367226c9a74dc73             5126 main/binary-amd64/Packages
+ ed8e45b43583733739ffe382ac3d9982             2160 main/binary-amd64/Packages.gz
 SHA1:
- ab1311badb7a0fa92918cbd630af8595d2c53816             4324 main/binary-amd64/Packages
- fa6ccf031c87059352eb1fee9e1c38982413cb5b             1880 main/binary-amd64/Packages.gz
+ cdea2dc5e42e5da0df6dac13c26a7cb70c8530ce             5126 main/binary-amd64/Packages
+ a948a63b21410a05660555d91cd8b1263b9e6822             2160 main/binary-amd64/Packages.gz
 SHA256:
- 67140f261413f3263a639ba458a4b722ae6f251c1988d20f91879bb628919f2a             4324 main/binary-amd64/Packages
- 9e0cf781add80ba0045fba14d630373a8735a8bc34ffe6845ed20d26fdc99f61             1880 main/binary-amd64/Packages.gz
+ ac8165fe141ba9d25ff3a714004463cfae2aed70e0e3bd2235ca44ec38c8757c             5126 main/binary-amd64/Packages
+ 1ec0c3b3dcdad7ade80fc2eebfb58be60fd3b59c8926f24659df595727c43757             2160 main/binary-amd64/Packages.gz
 SHA512:
- 9f83518f69bf8ff79fb109c34b64c2b7696c7d7cdb0e0b7b891d5c999a553eae5125e33f3dcc34b46eb3258ab270bf130a63c9766565a4d0303c63fcef8603a7             4324 main/binary-amd64/Packages
- a53a2d494cb5ff100ade315f41945087a4fea21340d78227d853bac0926caff0b79b4205d4b9b09fdfd9e4b65fe94271822e0e215df8fe8b6cf3b3adf08b04fc             1880 main/binary-amd64/Packages.gz
+ 1e1efc0993755a9b6e95c80bbc55bc1e7f541a5113cba668b13c21f1a6f94c3bb310c9440809f1dd8eb7d6b9d7190e9a4890cf78c1fdee5baedaa4fc4f4974fb             5126 main/binary-amd64/Packages
+ d3f7e4d7e0b8333be09b8bdb40527f78d3013850477f544fbf286bc23b290e0d5c0b43a43f52d9443a34e389810e4a7a45a35a764d8571550db33708eec7fcd6             2160 main/binary-amd64/Packages.gz

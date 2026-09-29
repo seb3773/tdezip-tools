@@ -58,6 +58,25 @@ Description: Richard Geldreich LZHAM high-ratio lossless compression utility
  pipelines and Tar multi-file archives (.tar.lzham).
  Packaged for Trinity Desktop Environment (TDE) / TdeZip companion tools.
 
+Package: pack
+Version: 1.0-1
+Architecture: amd64
+Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
+Depends: libc6 (>= 2.15)
+Provides: pack, unpack, pcat
+Filename: pool/main/p/pack/pack_1.0-1_amd64.deb
+Size: 10184
+MD5sum: a4d5bc93ac9fd0c9d8a9e4d08e436b81
+SHA1: 86cee2353a9f18ef9ebae1eb1b05938b1346935e
+SHA256: 6ebc7921fd906f2456aee3d4bb2c2474c78d11e61e7197e3416c8bd941c5fe85
+Section: utils
+Priority: optional
+Description: Historical Unix Huffman pack/unpack compression suite
+ Pack is the canonical Huffman compression utility originally written by
+ Thomas G. Szymanski (Bell Labs, 1978-1979) for Research Unix V8 / System V.
+ It compresses single files into .z format and includes unpack and pcat.
+ Modernized and packaged for Trinity Desktop Environment (TDE) / TdeZip companion tools.
+
 Package: pea-c
 Version: 1.0-1
 Architecture: amd64
