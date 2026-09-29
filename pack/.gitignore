@@ -1,0 +1,5 @@
+pack
+unpack
+pcat
+pkg_root/
+*.deb

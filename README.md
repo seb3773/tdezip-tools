@@ -1,6 +1,6 @@
 # TdeZip-Tools
 
-Official APT repository and source tree for custom companion compression and archiving engines for **TdeZip** (TDE Archive Manager).
+Official APT repository for TdeZip archivers utilities.
 
 **Repository Portal / GitHub Pages**: [https://seb3773.github.io/tdezip-tools/](https://seb3773.github.io/tdezip-tools/)
 
