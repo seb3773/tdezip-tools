@@ -1,0 +1,68 @@
+.TH CMIX 1 "September 2026" "cmix 21" "User Commands"
+.SH NAME
+cmix \- Extreme lossless data compression program using context mixing
+.SH SYNOPSIS
+.B cmix
+.RB [ \-c | \-d | \-t | \-n | \-s ]
+.RI [ dictionary ]
+.I input
+.RI [ output ]
+.br
+.B cmix
+.RB [ \-c | \-d ]
+<
+.I input
+>
+.I output
+.SH DESCRIPTION
+.B cmix
+is a lossless data compression program written by Byron Knoll that achieves state-of-the-art compression ratios using an ensemble of context models (PPM, PAQ8, indirect hashes, interval models) combined via a recurrent LSTM neural network.
+.PP
+.B cmix
+prioritizes compression ratio above all else. It is computationally demanding and requires substantial CPU and RAM resources. A machine with at least 32 GB of RAM is strongly recommended.
+.SH OPTIONS
+.TP
+.B \-c
+Compress
+.I input
+file into
+.IR output .
+If no file arguments are given and standard input is redirected, reads from stdin and writes to stdout.
+.TP
+.B \-d
+Decompress
+.I input
+archive into
+.IR output .
+If no file arguments are given and standard input is redirected, reads from stdin and writes to stdout.
+.TP
+.B \-t
+Test the integrity of
+.IR archive .
+Decompresses into memory/temporary space and verifies validity without modifying destination files.
+.TP
+.B \-n
+Compress without preprocessing transformations.
+.TP
+.B \-s
+Run only the preprocessing step without context mixing.
+.TP
+.B \-h, \-\-help
+Display command usage summary and exit.
+.TP
+.B \-v, \-V, \-\-version
+Display program version and exit.
+.SH TAR INTEGRATION
+.B cmix
+can be used with GNU
+.BR tar (1)
+as a compression filter:
+.PP
+.RS
+tar \-\-use-compress-program=cmix \-cf archive.tar.cmix file1 file2
+.br
+tar \-\-use-compress-program="cmix \-d" \-xf archive.tar.cmix
+.RE
+.SH AUTHORS
+Written by Byron Knoll <byron@byronknoll.com>.
+Packaged for Trinity Desktop Environment (TDE) / TdeZip companion tools by seb3773.

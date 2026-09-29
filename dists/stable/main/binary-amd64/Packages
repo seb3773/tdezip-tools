@@ -1,3 +1,23 @@
+Package: cmix
+Version: 21-1
+Architecture: amd64
+Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
+Depends: libc6 (>= 2.34), libstdc++6 (>= 11)
+Provides: cmix
+Filename: pool/main/c/cmix/cmix_21-1_amd64.deb
+Size: 450816
+MD5sum: b2b543b4f83db2e107f851fb8afff0a1
+SHA1: 96261420fcaf1563cee12d4e18932640027a368c
+SHA256: a70704b9defbc9224738f662f29e32efcb1ac5cf9c4aac5c18163774b335b87f
+Section: utils
+Priority: optional
+Description: Extreme lossless data compression program using context mixing
+ CMIX is a lossless data compression program developed by Byron Knoll
+ that achieves state-of-the-art compression ratios by combining an ensemble
+ of diverse context models (PPM, PAQ8, indirect hashes, interval models)
+ through a recurrent LSTM neural network. Designed for maximum ratio benchmarks.
+ Packaged for Trinity Desktop Environment (TDE) / TdeZip companion tools.
+
 Package: density
 Version: 1.0-1
 Architecture: amd64
