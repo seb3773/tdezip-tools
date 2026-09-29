@@ -37,6 +37,26 @@ Description: LHA archive compression and extraction utility (native C)
  full archive creation (-a), updating (-u), testing (-t) and extraction (-x).
  Compiled for Trinity Desktop Environment (TDE) / TdeZip archiver.
 
+Package: lzav
+Version: 1.0-1
+Architecture: amd64
+Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
+Depends: libc6 (>= 2.15)
+Provides: lzav
+Filename: pool/main/l/lzav/lzav_1.0-1_amd64.deb
+Size: 14540
+MD5sum: 8273e545e8ce37faaeba7d009285420d
+SHA1: 440471f6699f5038be031c02325e265b26740081
+SHA256: acba7901b7f7b5464b618eeb30e21f84cf34330f2c26a318913705d7518b6187
+Section: utils
+Priority: optional
+Description: Fast in-memory LZ77 lossless data compression utility
+ LZAV is a fast, general-purpose in-memory lossless data compression
+ algorithm developed by Aleksey Vaneev. It achieves superior compression
+ ratios to LZ4/Snappy while delivering multi-gigabyte per second decompression
+ speeds with built-in out-of-bounds safety checks.
+ Packaged for Trinity Desktop Environment (TDE) / TdeZip companion tools.
+
 Package: lzfse
 Version: 1.0-1
 Architecture: amd64

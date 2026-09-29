@@ -1,0 +1,54 @@
+.TH LZAV 1 "September 2026" "lzav 1.0" "User Commands"
+.SH NAME
+lzav \- fast lossless data compression utility
+.SH SYNOPSIS
+.B lzav
+[\fIOPTIONS\fR] [\fIFILES...\fR]
+.SH DESCRIPTION
+.B lzav
+is a lightweight, extremely fast lossless data compression and decompression utility based on Aleksey Vaneev's LZAV algorithm.
+It offers compression ratios superior to LZ4 and Snappy with decompression throughput reaching several gigabytes per second.
+.PP
+If no files are specified or if '-' is given,
+.B lzav
+reads from standard input and writes to standard output.
+.SH OPTIONS
+.TP
+.BR \-c ", " \-\-stdout
+Write output on standard output, keep original files unchanged.
+.TP
+.BR \-d ", " \-\-decompress ", " \-\-decode
+Decompress input files.
+.TP
+.BR \-t ", " \-\-test
+Test the integrity of compressed files without writing decompressed data.
+.TP
+.BI \-i " file" ", " \-\-input= "file"
+Specify input file explicitly.
+.TP
+.BI \-o " file" ", " \-\-output= "file"
+Specify output file explicitly.
+.TP
+.BR \-f ", " \-\-force
+Force overwrite of output files without prompt.
+.TP
+.BR \-k ", " \-\-keep
+Keep input files (default behavior).
+.TP
+.BR \-1 ", " \-\-fast
+Use fast compression mode (default, lzav_compress_default).
+.TP
+.BR \-2 ", " \-9 ", " \-\-best ", " \-\-hi
+Use high compression mode (lzav_compress_hi) for better ratio.
+.TP
+.BR \-v ", " \-\-verbose
+Verbose mode; display compression ratios and block details.
+.TP
+.BR \-V ", " \-\-version
+Print version information and exit.
+.TP
+.BR \-h ", " \-\-help
+Print usage help and exit.
+.SH AUTHOR
+LZAV algorithm by Aleksey Vaneev.
+CLI utility and packaging by seb3773 for TdeZip / Trinity Desktop Environment (TDE).
