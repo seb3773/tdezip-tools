@@ -1,0 +1,51 @@
+.TH UC2 1 "October 2026" "uc2 3.0.0" "User Commands"
+.SH NAME
+uc2 \- UltraCompressor II archiver revival
+.SH SYNOPSIS
+.B uc2
+[\fIOPTIONS\fR] \fIarchive.uc2\fR [\fIFILES...\fR]
+.SH DESCRIPTION
+.B uc2
+is a cross-platform revival of UltraCompressor II, the DOS-era archiver by Nico de Vries (1992-1996), rewritten as a modern, portable C99 tool with backward compatibility by Evgeny Valetov.
+It supports content-defined chunking (CDC), master block deduplication, rANS entropy coding, and BLAKE3 integrity verification.
+.SH OPTIONS
+.TP
+.B \-w
+Create archive.
+.TP
+.B \-l
+List archive contents.
+.TP
+.B \-t
+Test archive integrity.
+.TP
+.BI \-L " level"
+Compression level: 2=Fast, 3=Normal, 4=Tight (default), 5=Ultra (levels 2-5 use Huffman and are compatible with DOS UC2 Pro); 6-9 use modern rANS entropy coding.
+.TP
+.BI \-d " path"
+Destination directory to extract to.
+.TP
+.B \-f
+Force overwrite of existing files during extraction.
+.TP
+.B \-p
+Extract files to standard output.
+.TP
+.B \-q
+Quiet mode (suppress status messages).
+.TP
+.B \-a
+Include all file versions.
+.TP
+.B \-D
+Do not set time and permissions of directories (-DD also skips file metadata).
+.TP
+.B \-T
+Tab-separated output for listing archive contents.
+.TP
+.B \-B
+Benchmark all compression methods on input files.
+.SH AUTHOR
+Original UC2 by Nico de Vries (1992-1996).
+Revival implementation by Evgeny Valetov.
+Packaged for Trinity Desktop Environment (TDE) / TdeZip companion tools.

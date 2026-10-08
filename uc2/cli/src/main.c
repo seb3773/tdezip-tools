@@ -1,0 +1,2023 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
+/* UltraCompressor II extraction tool.
+   Copyright © Jan Bobrowski 2020, 2021
+   torinak.com/~jb/unuc2/
+
+   This program is free software: you can redistribute it and modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+*/
+
+#include <limits.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <time.h>
+#include <utime.h>
+#ifdef __DJGPP__
+#include <err.h>
+#include <fnmatch.h>
+void setprogname(const char *argv0);
+#else
+#include <fnmatch.h>
+#include <getopt.h>
+#include <err.h>
+#endif
+#include <stdarg.h>
+#include <stdbool.h>
+#include <errno.h>
+#include <assert.h>
+#include <sys/stat.h>
+#include <dirent.h>
+
+#include <uc2/libuc2.h>
+#include <uc2/uc2_cdc.h>
+#include <uc2/uc2_ingest.h>
+#include <uc2/uc2_lz4.h>
+#include <uc2/uc2_ots.h>
+#include <uc2/uc2_sha256.h>
+#include <uc2/uc2_version.h>
+
+#include "list.h"
+#define endof(T) (T + sizeof T/sizeof*T)
+#define STR(S) STR_(S)
+#define STR_(S) #S
+
+enum ots_mode {
+	OTS_MODE_NONE = 0,
+	OTS_MODE_ATTACH,
+	OTS_MODE_EXTRACT,
+	OTS_MODE_INFO
+};
+
+enum ingest_mode {
+	INGEST_MODE_NONE = 0,
+	INGEST_MODE_WRITE,
+	INGEST_MODE_RESTORE
+};
+
+struct options {
+	bool list:1;
+	bool all:1;
+	bool test:1;
+	bool pipe:1;
+	bool create:1;
+	bool overwrite:1;
+	bool no_dir_meta:1;
+	bool no_file_meta:1;
+	bool help:1;
+	bool quiet:1;
+	bool benchmark:1;
+	int ots_mode;
+	int ingest_mode;
+	char sep;
+	int level;
+	char *archive;
+	char *dest;
+	char *ots_path;
+} opt = {.sep = ' ', .level = 4};
+
+static const char *level_name(int level)
+{
+	switch (level) {
+	case 2:  return "Fast";
+	case 3:  return "Normal";
+	case 5:  return "Ultra";
+	case 6:  return "rANS Fast";
+	case 7:  return "rANS Normal";
+	case 8:  return "rANS Tight";
+	case 9:  return "rANS Ultra";
+	default: return "Tight";
+	}
+}
+
+/* UC2 talks — warm, confident, slightly quirky.
+   Suppressed by -q for scripting. */
+static void uc2_say(FILE *f, const char *fmt, ...)
+{
+	if (opt.quiet) return;
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(f, fmt, ap);
+	va_end(ap);
+}
+
+/* Archive positions are 32-bit in the UC2 container; fail loudly
+   rather than wrap when an archive would cross 4 GiB. */
+static unsigned tell32(FILE *f)
+{
+	long pos = ftell(f);
+	if (pos < 0)
+		err(EXIT_FAILURE, "ftell");
+	if ((unsigned long)pos > 0xFFFFFFFFul)
+		errx(EXIT_FAILURE, "archive exceeds the 4 GiB UC2 format limit");
+	return (unsigned)pos;
+}
+
+static int my_read(void *ctx, unsigned pos, void *ptr, unsigned len)
+{
+	if (fseek(ctx, pos, SEEK_SET) < 0)
+		err(EXIT_FAILURE, "fseek");
+	return fread(ptr, 1, len, ctx);
+}
+
+static void *my_alloc(void *ctx, unsigned size)
+{
+	return malloc(size);
+}
+
+static void my_free(void *ctx, void *ptr)
+{
+	free(ptr);
+}
+
+static void my_warn(void *ctx, char *f, ...)
+{
+	fprintf(stderr, "%s: ", opt.archive);
+	va_list ap;
+	va_start(ap, f);
+	vfprintf(stderr, f, ap);
+	va_end(ap);
+}
+
+static void uc2err(uc2_handle uc2, int err, char *f, ...)
+{
+	fprintf(stderr, "%s", opt.archive);
+	if (f) {
+		fprintf(stderr, " (");
+		va_list ap;
+		va_start(ap, f);
+		vfprintf(stderr, f, ap);
+		va_end(ap);
+		fprintf(stderr, ")");
+	}
+	fprintf(stderr, ": %s\n", uc2_message(uc2, err));
+}
+
+static struct uc2_io io = {
+	.read = my_read,
+	.alloc = my_alloc,
+	.free = my_free,
+	.warn = my_warn
+};
+
+struct list files;
+struct list dirs;
+
+struct node {
+	struct list by_type;
+	struct list on_dir;
+	struct list on_sel;
+	struct list children; // head
+	struct node *parent;
+	int version;
+	bool visit:1;
+	bool marked:1;
+	struct uc2_entry entry;
+};
+
+struct node root = {
+	.entry = {.is_dir = 1},
+	.children = {.prev = &root.children, .next = &root.children}
+};
+
+static void new_entry(struct node *ne)
+{
+	struct uc2_entry *e = &ne->entry;
+	struct node *dir = &root;
+	if (e->dirid) {
+		for (struct list *l = dirs.next;; l = l->next) {
+			if (l == &dirs) {
+				warnx("Missing dir of %s\n", e->name);
+				dir = &root;
+				break;
+			}
+			dir = list_item(l, struct node, by_type);
+			if (dir->entry.id == ne->entry.dirid)
+				break;
+		}
+	}
+	ne->parent = dir;
+	struct list *at = 0;
+	if (!e->is_dir) {
+		for (struct list *l = dir->children.next; l != &dir->children; l = l->next) {
+			struct node *fe = list_item(l, struct node, on_dir);
+			if (fe->entry.name_len == ne->entry.name_len
+			 && memcmp(fe->entry.name, ne->entry.name, ne->entry.name_len) == 0) {
+				fe->version++;
+				if (!at) at = &fe->on_dir;
+			}
+		}
+	}
+	list_append(at ? at : &dir->children, &ne->on_dir);
+	list_append(e->is_dir ? &dirs : &files, &ne->by_type);
+	list_init(&ne->children);
+	list_init(&ne->on_sel);
+	ne->version = 0;
+	ne->visit = false;
+	ne->marked = false;
+}
+
+static void print_dir_path(struct node *ne)
+{
+	ne = ne->parent;
+	if (!ne) {
+		printf("?/");
+		return;
+	}
+	if (ne->entry.dirid)
+		print_dir_path(ne);
+	printf("%s/", ne->entry.name);
+}
+
+static void print_time(unsigned t)
+{
+	int w = 0;
+	if (t) {
+		w += printf("%04u-%02u-%02u %02u:%02u", 1980 + (t>>25), t>>21&15, t>>16&31, t>>11&31, t>>5&63);
+		int s = t<<1&62;
+		if (s < 60)
+			w += printf(":%02u", s);
+	}
+	if (opt.sep == ' ')
+		printf("%*s", 19 - w, "");
+}
+
+static void mark(struct node *node, bool visit)
+{
+	if (node->marked)
+		return;
+	node->marked = true;
+	if (visit) {
+		node->visit = true;
+		for (struct list *l = node->children.next; l != &node->children; l = l->next) {
+			struct node *ne = list_item(l, struct node, on_dir);
+			if (opt.all || ne->version == 0)
+				mark(ne, true);
+		}
+	}
+	while ((node = node->parent) && !node->visit)
+		node->visit = true;
+}
+
+static void match_pattern(char *p)
+{
+	enum {
+		IntermediateDirs,
+		FilesAndSpecificDirs,
+		Dirs
+	};
+	struct list selected;
+	list_init(&selected);
+	list_add(&selected, &root.on_sel);
+	int version = opt.all ? -1 : 0;
+	for (;;) {
+		char *q = strchr(p, '/');
+		int mode;
+		if (!q) {
+			mode = FilesAndSpecificDirs;
+			q = strchr(p, 0);
+			if (q - p > 2) {
+				if (memcmp(q - 2, ";*", 2) == 0) {
+					version = -1;
+					q[-2] = 0;
+				} else if(isdigit(q[-1])) {
+					do q--; while (q - p > 2 && isdigit(q[-1]));
+					if (q[-1] == ';') {
+						q[-1] = 0;
+						version = atoi(q);
+					}
+				}
+			}
+		} else {
+			mode = IntermediateDirs;
+			*q = 0;
+			if (!q[1])
+				mode = Dirs;
+		}
+		struct list sentinel;
+		list_append(&selected, &sentinel);
+		while (selected.next != &sentinel) {
+			struct node *dir = list_item(selected.next, struct node, on_sel);
+			list_del(&dir->on_sel);
+			for (struct list *l = dir->children.next; l != &dir->children; l = l->next) {
+				struct node *ne = list_item(l, struct node, on_dir);
+				if (!ne->entry.is_dir) {
+					if (mode == FilesAndSpecificDirs
+					 && (version < 0 || ne->version == version)
+					 && fnmatch(p, ne->entry.name, 0) == 0)
+						mark(ne, false);
+					continue;
+				}
+				if (mode == IntermediateDirs) {
+					list_del(&ne->on_sel);
+					if (fnmatch(p, ne->entry.name, 0) == 0)
+						list_append(&selected, &ne->on_sel);
+					continue;
+				}
+				if (strcmp(ne->entry.name, p) == 0
+				 || (fnmatch(p, ne->entry.name, 0) == 0))
+					mark(ne, mode == Dirs);
+			}
+		}
+		list_del(&sentinel);
+		if (mode != IntermediateDirs)
+			break;
+		p = q + 1;
+	}
+}
+
+enum cause {
+	VisitFile,
+	EnterDir,
+	LeaveDir
+};
+
+static int visit_selected(struct node *dir, bool (*cb)(struct node *, void *ctx, enum cause), void *ctx)
+{
+	int r = 1;
+	for (struct list *l=dir->children.next; l!=&dir->children; l=l->next) {
+		struct node *ne = list_item(l, struct node, on_dir);
+		if (ne->entry.is_dir)
+			continue;
+		if (!ne->visit && !ne->marked)
+			continue;
+		r = cb(ne, ctx, VisitFile);
+		if (r <= 0)
+			break;
+	}
+	if (!r)
+		return r;
+	for (struct list *l=dir->children.next; l!=&dir->children; l=l->next) {
+		struct node *ne = list_item(l, struct node, on_dir);
+		if (!ne->entry.is_dir)
+			continue;
+		if (!ne->visit && !ne->marked)
+			continue;
+		r = cb(ne, ctx, EnterDir);
+		if (r <= 0)
+			break;
+		r = visit_selected(ne, cb, ctx);
+		if (r <= 0)
+			break;
+		if (!ne->marked)
+			continue;
+		r = cb(ne, ctx, LeaveDir);
+		if (r <= 0)
+			break;
+	}
+	return r;
+}
+
+static void print_entry(struct node *ne, int size_w)
+{
+	struct uc2_entry *e = &ne->entry;
+	char t[] = "adlshr";
+	unsigned a = e->attr;
+	for (char *p = t; *p; p++, a<<=1)
+		if (!(a & 0x20))
+			*p = '-';
+	printf("%s", t);
+	putchar(opt.sep);
+	print_time(e->dos_time);
+	putchar(opt.sep);
+	if (opt.sep == ' ') {
+		if (e->is_dir) printf("%*s", size_w, "");
+		else printf("%*u", size_w, e->size);
+	} else
+		if (!e->is_dir) printf("%u", e->size);
+	putchar(opt.sep);
+	if (e->dirid)
+		print_dir_path(ne);
+	printf("%s", e->name);
+	if (e->is_dir && opt.sep == ' ')
+		putchar('/');
+	if (ne->version) {
+		putchar(opt.sep == ' ' ? ';' : opt.sep);
+		printf("%u", ne->version);
+	}
+	putchar('\n');
+}
+
+static bool max_size_cb(struct node *ne, void *ctx, enum cause cause)
+{
+	if (cause == VisitFile) {
+		unsigned *max = ctx;
+		if (*max < ne->entry.size)
+			*max = ne->entry.size;
+	}
+	return true;
+}
+
+static bool print_entry_cb(struct node *ne, void *ctx, enum cause cause)
+{
+	if (ne->marked && cause != LeaveDir) {
+		int size_w = *(int*)ctx;
+		print_entry(ne, size_w);
+	}
+	return true;
+}
+
+static void set_attrs(char *path, struct node *ne)
+{
+	unsigned dt = ne->entry.dos_time;
+	time_t t = 0;
+	if (dt) {
+		struct tm tm = {
+			.tm_year = 80 + (dt>>25),
+			.tm_mon = (dt>>21 & 15) - 1,
+			.tm_mday = dt>>16 & 31,
+			.tm_hour = dt>>11 & 31,
+			.tm_min = dt>>5 & 63,
+			.tm_sec = dt<<1 & 62,
+			.tm_isdst = -1
+		};
+		t = mktime(&tm);
+	}
+	if (t != (time_t)-1) {
+		struct utimbuf ut = {.actime = t, .modtime = t};
+		(void)utime(path, &ut);
+	}
+	if (ne->entry.attr & UC2_Attr_R)
+		(void)chmod(path, 0444);
+}
+
+static int write_file(void *file, const void *ptr, unsigned len)
+{
+	if (file)
+		if (fwrite(ptr, 1, len, file) < len)
+			return -1;
+	return 0;
+}
+
+struct path {
+	uc2_handle uc2;
+	char *ptr;
+	char buffer[PATH_MAX];
+};
+
+static bool pipe_cb(struct node *ne, void *ctx, enum cause cause)
+{
+	if (cause == VisitFile) {
+		uc2_handle uc2 = ctx;
+		struct uc2_entry *e = &ne->entry;
+		if (opt.test)
+			uc2_say(stdout, "Testing %s %u bytes\n", e->name, e->size);
+		int ret = uc2_extract(uc2, &e->xi, e->size, write_file, opt.test ? 0 : stdout);
+		if (ret < 0)
+			uc2err(uc2, ret, "%s", e->name);
+	}
+	return true;
+}
+
+static bool extract_cb(struct node *ne, void *ctx, enum cause cause)
+{
+	struct path *path = ctx;
+	struct uc2_entry *e = &ne->entry;
+	unsigned l = e->name_len;
+
+	switch (cause) {
+	case VisitFile:
+	case EnterDir:;
+		/* Each UC2 entry name is a single path component (the directory
+		   tree is rebuilt from dirid parents).  A name that is empty,
+		   ".", "..", or contains a path separator is malformed or a
+		   path-traversal attempt -- refuse to extract it rather than
+		   write outside the destination. */
+		if (l == 0
+		    || (l == 1 && e->name[0] == '.')
+		    || (l == 2 && e->name[0] == '.' && e->name[1] == '.')
+		    || memchr(e->name, '/', l)
+		    || memchr(e->name, '\\', l))
+			errx(EXIT_FAILURE, "unsafe archive entry name: %.*s",
+			     (int)l, e->name);
+
+		char *p = path->ptr + l;
+		if (p + 1 >= endof(path->buffer))
+			errx(EXIT_FAILURE, "Path too long");
+		memcpy(path->ptr, e->name, l);
+
+		if (cause == VisitFile) {
+			*p = 0;
+			if (!opt.overwrite) {
+				if (access(path->buffer, F_OK) == 0) {
+					errno = EEXIST;
+					warn("%s", path->buffer);
+					break;
+				}
+			} else
+				(void) unlink(path->buffer);
+
+			FILE *f = fopen(path->buffer, "wb");
+			if (!f)
+				err(EXIT_FAILURE, "%s", path->buffer);
+			int ret = uc2_extract(path->uc2, &e->xi, e->size, write_file, f);
+			if (ret < 0)
+				uc2err(path->uc2, ret, "%s", e->name);
+			/* Report a write error (e.g. a full disk) surfaced at close
+			   rather than silently truncating the extracted file. */
+			if (fclose(f) != 0 && ret >= 0)
+				err(EXIT_FAILURE, "%s", path->buffer);
+			if (!opt.no_file_meta)
+				set_attrs(path->buffer, ne);
+			break;
+		}
+		*p++ = '/';
+		if (p == endof(path->buffer))
+			errx(EXIT_FAILURE, "Path too long");
+		path->ptr = p;
+		*p = 0;
+		int r = mkdir(path->buffer, 0777);
+		if (r < 0) {
+			if (errno != EEXIST)
+				err(EXIT_FAILURE, "mkdir %s", path->buffer);
+			ne->marked = false; // skip meta setting
+		}
+		break;
+
+	case LeaveDir:
+		assert(ne->entry.is_dir);
+		if (!opt.no_dir_meta) {
+			*path->ptr = 0;
+			set_attrs(path->buffer, ne);
+		}
+		path->ptr -= l + 1;
+	}
+	return true;
+}
+
+/* --- OpenTimestamps (Phase 7) --- */
+
+#ifdef _WIN32
+#  include <io.h>
+static int uc2_truncate(FILE *f, long len)
+{
+	int rc = _chsize_s(_fileno(f), (__int64)len);
+	return rc == 0 ? 0 : -1;
+}
+#else
+static int uc2_truncate(FILE *f, long len)
+{
+	return ftruncate(fileno(f), (off_t)len);
+}
+#endif
+
+static int file_size_of(const char *path, size_t *out)
+{
+	struct stat st;
+	if (stat(path, &st) < 0) return -1;
+	if (st.st_size < 0) return -1;
+	*out = (size_t)st.st_size;
+	return 0;
+}
+
+static int read_all(const char *path, uint8_t **out_data, size_t *out_len)
+{
+	size_t len;
+	if (file_size_of(path, &len) < 0) return -1;
+	uint8_t *buf = malloc(len ? len : 1);
+	if (!buf) return -1;
+	FILE *f = fopen(path, "rb");
+	if (!f) { free(buf); return -1; }
+	size_t got = fread(buf, 1, len, f);
+	fclose(f);
+	if (got != len) { free(buf); return -1; }
+	*out_data = buf;
+	*out_len = len;
+	return 0;
+}
+
+static int sha256_of_prefix(const char *path, size_t prefix_len,
+                            uint8_t out[32])
+{
+	FILE *f = fopen(path, "rb");
+	if (!f) return -1;
+	struct uc2_sha256 ctx;
+	uc2_sha256_init(&ctx);
+	uint8_t buf[8192];
+	size_t remaining = prefix_len;
+	while (remaining) {
+		size_t want = remaining < sizeof buf ? remaining : sizeof buf;
+		size_t got = fread(buf, 1, want, f);
+		if (got == 0) { fclose(f); return -1; }
+		uc2_sha256_update(&ctx, buf, got);
+		remaining -= got;
+	}
+	uc2_sha256_final(&ctx, out);
+	fclose(f);
+	return 0;
+}
+
+static void print_hex(const uint8_t *p, size_t n)
+{
+	for (size_t i = 0; i < n; i++) printf("%02x", p[i]);
+}
+
+/* Locate an existing OTS trailer in the archive on disk.
+ * Returns 0 if a well-formed trailer is found (and fills outputs),
+ *         1 if no trailer (back magic absent),
+ *         negative on parse error (back magic present but malformed).
+ * `*out_buf` is malloc'd; caller frees on success. */
+static int load_trailer(const char *archive_path,
+                        uint8_t **out_buf, size_t *out_buf_len,
+                        uint32_t *out_archive_len,
+                        const uint8_t **out_proof, size_t *out_proof_len)
+{
+	uint8_t *buf;
+	size_t len;
+	if (read_all(archive_path, &buf, &len) < 0)
+		err(EXIT_FAILURE, "%s", archive_path);
+	int rc = uc2_ots_trailer_parse(buf, len, out_archive_len,
+	                               out_proof, out_proof_len);
+	if (rc != 0) { free(buf); return rc; }
+	*out_buf = buf;
+	*out_buf_len = len;
+	return 0;
+}
+
+static int cmd_ots_attach(const char *archive_path, const char *proof_path,
+                          int force)
+{
+	/* Read the .ots proof and validate its envelope. */
+	uint8_t *proof; size_t proof_len;
+	if (read_all(proof_path, &proof, &proof_len) < 0)
+		err(EXIT_FAILURE, "%s", proof_path);
+	uint8_t hash_op;
+	const uint8_t *leaf, *body;
+	size_t leaf_len, body_len;
+	int rc = uc2_ots_parse_file(proof, proof_len, &hash_op,
+	                            &leaf, &leaf_len, &body, &body_len);
+	if (rc < 0) {
+		free(proof);
+		errx(EXIT_FAILURE, "%s: malformed .ots file (%d)", proof_path, rc);
+	}
+	if (hash_op != UC2_OTS_OP_SHA256) {
+		free(proof);
+		errx(EXIT_FAILURE, "%s: only SHA-256 .ots files are supported", proof_path);
+	}
+
+	/* Determine the archive byte range to attest (strip any existing trailer). */
+	size_t archive_file_len;
+	if (file_size_of(archive_path, &archive_file_len) < 0) {
+		free(proof);
+		err(EXIT_FAILURE, "%s", archive_path);
+	}
+
+	size_t attest_len = archive_file_len;
+	{
+		uint8_t *abuf;
+		size_t abuf_len;
+		if (read_all(archive_path, &abuf, &abuf_len) < 0)
+			err(EXIT_FAILURE, "%s", archive_path);
+		uint32_t existing_al;
+		const uint8_t *existing_proof;
+		size_t existing_pl;
+		int trc = uc2_ots_trailer_parse(abuf, abuf_len, &existing_al,
+		                                &existing_proof, &existing_pl);
+		free(abuf);
+		if (trc == UC2_OTS_OK) {
+			if (!force)
+				errx(EXIT_FAILURE,
+				     "%s: OTS trailer already present (use -f to replace)",
+				     archive_path);
+			attest_len = existing_al;
+		} else if (trc < 0) {
+			errx(EXIT_FAILURE,
+			     "%s: existing trailer is malformed (%d); aborting",
+			     archive_path, trc);
+		}
+	}
+
+	if (attest_len > 0xffffffffu) {
+		free(proof);
+		errx(EXIT_FAILURE, "%s: archive too large for v1 OTS trailer", archive_path);
+	}
+
+	/* Verify leaf digest matches the archive's SHA-256. */
+	uint8_t archive_sha[32];
+	if (sha256_of_prefix(archive_path, attest_len, archive_sha) < 0) {
+		free(proof);
+		err(EXIT_FAILURE, "%s", archive_path);
+	}
+	if (leaf_len != 32 || memcmp(archive_sha, leaf, 32) != 0) {
+		fprintf(stderr, "%s: proof leaf does not match archive SHA-256\n",
+		        archive_path);
+		fprintf(stderr, "  archive: "); print_hex(archive_sha, 32); fprintf(stderr, "\n");
+		fprintf(stderr, "  proof:   "); print_hex(leaf, leaf_len); fprintf(stderr, "\n");
+		free(proof);
+		return EXIT_FAILURE;
+	}
+
+	/* Build trailer and rewrite archive. */
+	size_t trailer_cap = UC2_OTS_TRAILER_OVERHEAD + proof_len;
+	uint8_t *trailer = malloc(trailer_cap);
+	if (!trailer) { free(proof); err(EXIT_FAILURE, "malloc"); }
+	int tn = uc2_ots_trailer_build((uint32_t)attest_len,
+	                               proof, proof_len, trailer, trailer_cap);
+	if (tn < 0) { free(trailer); free(proof);
+		errx(EXIT_FAILURE, "trailer build failed (%d)", tn); }
+
+	FILE *f = fopen(archive_path, "rb+");
+	if (!f) { free(trailer); free(proof); err(EXIT_FAILURE, "%s", archive_path); }
+	if (fseek(f, (long)attest_len, SEEK_SET) < 0) {
+		fclose(f); free(trailer); free(proof);
+		err(EXIT_FAILURE, "%s", archive_path);
+	}
+	if (fwrite(trailer, 1, (size_t)tn, f) != (size_t)tn) {
+		fclose(f); free(trailer); free(proof);
+		err(EXIT_FAILURE, "%s", archive_path);
+	}
+	/* Truncate any leftover bytes (e.g. when replacing a longer prior trailer). */
+	long new_end = (long)attest_len + tn;
+	fflush(f);
+	if (uc2_truncate(f, new_end) < 0) {
+		fclose(f); free(trailer); free(proof);
+		err(EXIT_FAILURE, "truncate");
+	}
+	fclose(f);
+
+	free(trailer);
+	free(proof);
+	uc2_say(stderr, "Attached %zu-byte OTS proof to %s\n",
+	        proof_len, archive_path);
+	uc2_say(stderr, "Everything went OK\n");
+	return EXIT_SUCCESS;
+}
+
+static int cmd_ots_extract(const char *archive_path, const char *out_path)
+{
+	uint8_t *buf; size_t buf_len;
+	uint32_t archive_len;
+	const uint8_t *proof; size_t proof_len;
+	int rc = load_trailer(archive_path, &buf, &buf_len,
+	                      &archive_len, &proof, &proof_len);
+	if (rc == 1)
+		errx(EXIT_FAILURE, "%s: no OTS trailer present", archive_path);
+	if (rc < 0)
+		errx(EXIT_FAILURE, "%s: malformed OTS trailer (%d)", archive_path, rc);
+
+	FILE *f = fopen(out_path, "wb");
+	if (!f) err(EXIT_FAILURE, "%s", out_path);
+	if (fwrite(proof, 1, proof_len, f) != proof_len)
+		err(EXIT_FAILURE, "%s", out_path);
+	fclose(f);
+	free(buf);
+	uc2_say(stderr, "Wrote %zu-byte .ots proof to %s\n", proof_len, out_path);
+	return EXIT_SUCCESS;
+}
+
+struct ots_info_ctx {
+	int n_attestations;
+};
+
+static int ots_info_cb(void *vctx,
+                       const uint8_t *tag,
+                       const uint8_t *payload, size_t payload_len,
+                       const uint8_t *digest, size_t digest_len)
+{
+	struct ots_info_ctx *c = vctx;
+	(void)digest; (void)digest_len;
+	c->n_attestations++;
+	const char *name = uc2_ots_attest_name(tag);
+	printf("  attestation: %s", name ? name : "<unknown>");
+	if (name && strcmp(name, "pending") == 0) {
+		/* Pending payload is varbytes(uri). */
+		uint64_t uri_len;
+		size_t consumed;
+		if (payload_len > 0 &&
+		    uc2_ots_varint_decode(payload, payload_len, &uri_len, &consumed) == 0 &&
+		    consumed + uri_len <= payload_len) {
+			printf("  (calendar: ");
+			fwrite(payload + consumed, 1, (size_t)uri_len, stdout);
+			printf(")");
+		}
+	} else if (name && strcmp(name, "Bitcoin") == 0) {
+		uint64_t height; size_t consumed;
+		if (uc2_ots_varint_decode(payload, payload_len, &height, &consumed) == 0)
+			printf("  (block height: %llu)", (unsigned long long)height);
+	}
+	putchar('\n');
+	return 0;
+}
+
+static int cmd_ots_info(const char *archive_path)
+{
+	uint8_t *buf; size_t buf_len;
+	uint32_t archive_len;
+	const uint8_t *proof; size_t proof_len;
+	int rc = load_trailer(archive_path, &buf, &buf_len,
+	                      &archive_len, &proof, &proof_len);
+	if (rc == 1)
+		errx(EXIT_FAILURE, "%s: no OTS trailer present", archive_path);
+	if (rc < 0)
+		errx(EXIT_FAILURE, "%s: malformed OTS trailer (%d)", archive_path, rc);
+
+	uint8_t hash_op;
+	const uint8_t *leaf, *body;
+	size_t leaf_len, body_len;
+	rc = uc2_ots_parse_file(proof, proof_len, &hash_op,
+	                        &leaf, &leaf_len, &body, &body_len);
+	if (rc < 0)
+		errx(EXIT_FAILURE, "%s: malformed .ots envelope (%d)", archive_path, rc);
+
+	printf("OTS proof for %s\n", archive_path);
+	printf("  archive bytes attested: %u\n", archive_len);
+	printf("  hash:    %s\n",
+	       hash_op == UC2_OTS_OP_SHA256 ? "SHA-256" : "<other>");
+	printf("  leaf:    "); print_hex(leaf, leaf_len); printf("\n");
+
+	uint8_t archive_sha[32];
+	if (sha256_of_prefix(archive_path, archive_len, archive_sha) < 0)
+		err(EXIT_FAILURE, "%s", archive_path);
+	int leaf_match = (leaf_len == 32 && memcmp(archive_sha, leaf, 32) == 0);
+	printf("  leaf matches archive: %s\n", leaf_match ? "yes" : "NO");
+
+	struct ots_info_ctx ctx = {0};
+	int wr = uc2_ots_walk(body, body_len, leaf, leaf_len, ots_info_cb, &ctx);
+	if (wr < 0)
+		errx(EXIT_FAILURE, "%s: walker error %d", archive_path, wr);
+	printf("  attestations: %d\n", ctx.n_attestations);
+	if (wr == UC2_OTS_RESULT_STRUCTURAL)
+		printf("  status: structurally valid; contains unsupported ops\n"
+		       "          run `ots verify` for full cryptographic check\n");
+	else
+		printf("  status: structurally valid (calendar-path ops only)\n");
+
+	free(buf);
+	return leaf_match && wr >= 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+/* Called from -t after the existing archive integrity check.
+ * Returns 0 if no trailer or trailer verifies; non-zero on mismatch. */
+static int verify_trailer_if_present(const char *archive_path)
+{
+	uint8_t *buf; size_t buf_len;
+	uint32_t archive_len;
+	const uint8_t *proof; size_t proof_len;
+	int rc = load_trailer(archive_path, &buf, &buf_len,
+	                      &archive_len, &proof, &proof_len);
+	if (rc == 1) return 0; /* no trailer */
+	if (rc < 0) {
+		fprintf(stderr, "%s: malformed OTS trailer (%d)\n", archive_path, rc);
+		return 1;
+	}
+	uint8_t hash_op;
+	const uint8_t *leaf, *body;
+	size_t leaf_len, body_len;
+	rc = uc2_ots_parse_file(proof, proof_len, &hash_op,
+	                        &leaf, &leaf_len, &body, &body_len);
+	if (rc < 0) {
+		fprintf(stderr, "%s: malformed .ots envelope (%d)\n", archive_path, rc);
+		free(buf);
+		return 1;
+	}
+	uint8_t archive_sha[32];
+	if (sha256_of_prefix(archive_path, archive_len, archive_sha) < 0) {
+		free(buf);
+		return 1;
+	}
+	if (hash_op != UC2_OTS_OP_SHA256 || leaf_len != 32 ||
+	    memcmp(archive_sha, leaf, 32) != 0) {
+		fprintf(stderr, "%s: OTS leaf does not match archive SHA-256\n",
+		        archive_path);
+		free(buf);
+		return 1;
+	}
+	int wr = uc2_ots_walk(body, body_len, leaf, leaf_len, NULL, NULL);
+	free(buf);
+	if (wr < 0) {
+		fprintf(stderr, "%s: OTS walker error %d\n", archive_path, wr);
+		return 1;
+	}
+	if (wr == UC2_OTS_RESULT_STRUCTURAL)
+		uc2_say(stderr, "OTS proof: structurally valid (run `ots verify` for full check)\n");
+	else
+		uc2_say(stderr, "OTS proof: leaf matches; structure verified\n");
+	return 0;
+}
+
+/* --- Archive creation --- */
+
+static void w16(unsigned char *p, unsigned v)
+{
+	p[0] = v & 0xFF;
+	p[1] = (v >> 8) & 0xFF;
+}
+
+static void w32(unsigned char *p, unsigned v)
+{
+	p[0] = v & 0xFF;
+	p[1] = (v >> 8) & 0xFF;
+	p[2] = (v >> 16) & 0xFF;
+	p[3] = (v >> 24) & 0xFF;
+}
+
+static unsigned short fletcher_csum(const unsigned char *data, unsigned len)
+{
+	if (!len) return 0xA55A;
+	unsigned v = 0xA55A;
+	const unsigned char *p = data;
+	const unsigned char *e = p + len - 1;
+	if (v > 0xFFFF)
+		v ^= *p++ << 8;
+	while (p < e) {
+		v ^= p[0] | p[1] << 8;
+		p += 2;
+	}
+	v &= 0xFFFF;
+	if (p == e)
+		v ^= *p | 0x10000;
+	return (unsigned short)(v & 0xFFFF);
+}
+
+static unsigned to_dos_time(time_t t)
+{
+	struct tm *tm = localtime(&t);
+	if (!tm || tm->tm_year < 80) return 0;
+	return ((unsigned)(tm->tm_year - 80) << 25) |
+	       ((unsigned)(tm->tm_mon + 1) << 21) |
+	       ((unsigned)tm->tm_mday << 16) |
+	       ((unsigned)tm->tm_hour << 11) |
+	       ((unsigned)tm->tm_min << 5) |
+	       ((unsigned)(tm->tm_sec / 2));
+}
+
+static unsigned fnv1a(const unsigned char *data, unsigned len)
+{
+	unsigned h = 2166136261u;
+	for (unsigned i = 0; i < len; i++) {
+		h ^= data[i];
+		h *= 16777619u;
+	}
+	return h;
+}
+
+static void make_dos_name(unsigned char dos_name[11], const char *filename)
+{
+	const char *base = strrchr(filename, '/');
+	base = base ? base + 1 : filename;
+	const char *dot = strrchr(base, '.');
+	int namelen = dot ? (int)(dot - base) : (int)strlen(base);
+
+	memset(dos_name, ' ', 11);
+	for (int i = 0; i < 8 && i < namelen; i++)
+		dos_name[i] = toupper((unsigned char)base[i]);
+	if (dot) {
+		const char *ext = dot + 1;
+		for (int i = 0; i < 3 && ext[i]; i++)
+			dos_name[8 + i] = toupper((unsigned char)ext[i]);
+	}
+}
+
+struct mem_reader {
+	const unsigned char *data;
+	unsigned pos, len;
+};
+
+static int mem_read_cb(void *ctx, void *buf, unsigned len)
+{
+	struct mem_reader *mr = ctx;
+	unsigned avail = mr->len - mr->pos;
+	if (len > avail) len = avail;
+	if (len > 0) {
+		memcpy(buf, mr->data + mr->pos, len);
+		mr->pos += len;
+	}
+	return (int)len;
+}
+
+static int fread_cb(void *ctx, void *buf, unsigned len)
+{
+	return (int)fread(buf, 1, len, (FILE *)ctx);
+}
+
+static int fwrite_cb(void *ctx, const void *ptr, unsigned len)
+{
+	return fwrite(ptr, 1, len, (FILE *)ctx) == len ? 0 : -1;
+}
+
+struct dir_rec {
+	char path[PATH_MAX];
+	char name[300];
+	unsigned char dos_name[11];
+	unsigned id;       /* unique dir ID (starts from 1) */
+	unsigned parent_id; /* 0 = root */
+	unsigned dos_time;
+};
+
+struct file_rec {
+	char path[PATH_MAX];
+	char name[300];
+	unsigned char dos_name[11];
+	unsigned size;
+	unsigned csize;
+	unsigned short csum;
+	unsigned offset;
+	unsigned dos_time;
+	unsigned parent_id; /* 0 = root, or dir_rec.id */
+	int master_idx;     /* 0=SuperMaster, >=2=custom master */
+};
+
+struct master_rec {
+	unsigned idx;
+	unsigned char *data;
+	unsigned size;
+	unsigned csize;
+	unsigned short csum;
+	unsigned offset;
+	unsigned key;
+	unsigned ref_len;
+	unsigned ref_ctr;
+};
+
+/* Growable arrays for scanning input paths */
+static struct dir_rec *g_dirs;
+static int g_ndirs, g_dir_cap;
+static struct file_rec *g_files;
+static int g_nfiles, g_file_cap;
+static unsigned g_next_dirid = 1;
+
+static void scan_path(const char *path, unsigned parent_id);
+
+static void add_dir(const char *path, const char *name, unsigned parent_id, unsigned dos_time)
+{
+	if (g_ndirs >= g_dir_cap) {
+		g_dir_cap = g_dir_cap ? g_dir_cap * 2 : 32;
+		g_dirs = realloc(g_dirs, (unsigned)g_dir_cap * sizeof *g_dirs);
+		if (!g_dirs) err(EXIT_FAILURE, "realloc");
+	}
+	struct dir_rec *d = &g_dirs[g_ndirs++];
+	memset(d, 0, sizeof *d);
+	snprintf(d->path, sizeof d->path, "%s", path);
+	snprintf(d->name, sizeof d->name, "%s", name);
+	make_dos_name(d->dos_name, name);
+	d->id = g_next_dirid++;
+	d->parent_id = parent_id;
+	d->dos_time = dos_time;
+}
+
+static void add_file(const char *path, const char *name, unsigned parent_id,
+                     unsigned size, unsigned dos_time)
+{
+	if (g_nfiles >= g_file_cap) {
+		g_file_cap = g_file_cap ? g_file_cap * 2 : 64;
+		g_files = realloc(g_files, (unsigned)g_file_cap * sizeof *g_files);
+		if (!g_files) err(EXIT_FAILURE, "realloc");
+	}
+	struct file_rec *f = &g_files[g_nfiles++];
+	memset(f, 0, sizeof *f);
+	snprintf(f->path, sizeof f->path, "%s", path);
+	snprintf(f->name, sizeof f->name, "%s", name);
+	make_dos_name(f->dos_name, name);
+	f->size = size;
+	f->dos_time = dos_time;
+	f->parent_id = parent_id;
+}
+
+static void scan_dir(const char *dirpath, unsigned dirid)
+{
+	DIR *d = opendir(dirpath);
+	if (!d) err(EXIT_FAILURE, "%s", dirpath);
+	struct dirent *de;
+	while ((de = readdir(d))) {
+		if (de->d_name[0] == '.' &&
+		    (de->d_name[1] == '\0' ||
+		     (de->d_name[1] == '.' && de->d_name[2] == '\0')))
+			continue;
+		char child[PATH_MAX];
+		snprintf(child, sizeof child, "%s/%s", dirpath, de->d_name);
+		scan_path(child, dirid);
+	}
+	closedir(d);
+}
+
+static void scan_path(const char *path, unsigned parent_id)
+{
+	struct stat st;
+	if (stat(path, &st) < 0)
+		err(EXIT_FAILURE, "%s", path);
+
+	const char *base = strrchr(path, '/');
+	base = base ? base + 1 : path;
+
+	if (S_ISDIR(st.st_mode)) {
+		add_dir(path, base, parent_id, to_dos_time(st.st_mtime));
+		unsigned dirid = g_dirs[g_ndirs - 1].id;
+		scan_dir(path, dirid);
+	} else if (S_ISREG(st.st_mode)) {
+		add_file(path, base, parent_id, (unsigned)st.st_size,
+		         to_dos_time(st.st_mtime));
+	} else {
+		warnx("%s: skipping (not a regular file or directory)", path);
+	}
+}
+
+static int create_archive(int nargs, char **args)
+{
+	uc2_say(stderr, "UC2 compression level: %s\n", level_name(opt.level));
+
+	/* Phase 0: Scan inputs (files and directories) */
+	g_dirs = NULL; g_ndirs = 0; g_dir_cap = 0;
+	g_files = NULL; g_nfiles = 0; g_file_cap = 0;
+	g_next_dirid = 1;
+
+	for (int i = 0; i < nargs; i++)
+		scan_path(args[i], 0);
+
+	int nfiles = g_nfiles, ndirs = g_ndirs;
+	struct file_rec *recs = g_files;
+	struct dir_rec *dirs = g_dirs;
+	g_files = NULL; g_dirs = NULL;
+
+	if (nfiles == 0)
+		errx(EXIT_FAILURE, "No files to compress");
+
+	/* Load the SuperMaster (49152-byte built-in dictionary) */
+	unsigned char *supermaster = malloc(49152);
+	if (!supermaster)
+		err(EXIT_FAILURE, "malloc");
+	int sm_ret = uc2_get_supermaster(supermaster, 49152);
+	if (sm_ret < 0)
+		errx(EXIT_FAILURE, "Failed to load SuperMaster (%d)", sm_ret);
+
+	/* Phase 1: Content-defined chunking for master-block grouping.
+	   Split each file into CDC chunks (Gear hash, avg 8KB), hash each
+	   chunk, and group files that share chunks.  This detects similar
+	   content at ANY position, not just identical file prefixes. */
+	enum { MinMasterFile = 1024, MaxMasterSize = 65535 };
+
+	/* Collect chunk hashes per file */
+	struct { uint32_t hash; int file_idx; } *chunk_map = NULL;
+	int chunk_map_len = 0, chunk_map_cap = 0;
+
+	for (int i = 0; i < nfiles; i++) {
+		if (recs[i].size < MinMasterFile)
+			continue;
+		FILE *f = fopen(recs[i].path, "rb");
+		if (!f) err(EXIT_FAILURE, "%s", recs[i].path);
+		unsigned char *buf = malloc(recs[i].size);
+		if (!buf) err(EXIT_FAILURE, "malloc");
+		size_t n = fread(buf, 1, recs[i].size, f);
+		fclose(f);
+
+		struct uc2_chunker chunker;
+		uc2_chunker_init(&chunker, 12, 0, 0);  /* avg 4KB chunks */
+		size_t off, len;
+		while (uc2_chunker_next(&chunker, buf, n, &off, &len)) {
+			if (chunk_map_len >= chunk_map_cap) {
+				chunk_map_cap = chunk_map_cap ? chunk_map_cap * 2 : 256;
+				chunk_map = realloc(chunk_map, (unsigned)chunk_map_cap * sizeof *chunk_map);
+				if (!chunk_map) err(EXIT_FAILURE, "realloc");
+			}
+			chunk_map[chunk_map_len].hash = uc2_fnv1a(buf + off, len);
+			chunk_map[chunk_map_len].file_idx = i;
+			chunk_map_len++;
+		}
+		/* Final chunk */
+		if (len > 0) {
+			if (chunk_map_len >= chunk_map_cap) {
+				chunk_map_cap = chunk_map_cap ? chunk_map_cap * 2 : 256;
+				chunk_map = realloc(chunk_map, (unsigned)chunk_map_cap * sizeof *chunk_map);
+				if (!chunk_map) err(EXIT_FAILURE, "realloc");
+			}
+			chunk_map[chunk_map_len].hash = uc2_fnv1a(buf + off, len);
+			chunk_map[chunk_map_len].file_idx = i;
+			chunk_map_len++;
+		}
+		free(buf);
+	}
+
+	/* Find chunk hashes shared by 2+ files and group those files */
+	bool *grouped = calloc(nfiles, sizeof *grouped);
+	if (!grouped) err(EXIT_FAILURE, "malloc");
+
+	int nmasters = 0, master_cap = 16;
+	struct master_rec *masters = calloc(master_cap, sizeof *masters);
+	if (!masters) err(EXIT_FAILURE, "malloc");
+
+	for (int i = 0; i < chunk_map_len; i++) {
+		uint32_t ch = chunk_map[i].hash;
+		/* Count distinct files sharing this chunk */
+		int file_ids[256];
+		int nf = 0;
+		for (int j = i; j < chunk_map_len && nf < 256; j++) {
+			if (chunk_map[j].hash != ch) continue;
+			int fj = chunk_map[j].file_idx;
+			if (grouped[fj] || recs[fj].size < MinMasterFile) continue;
+			int dup = 0;
+			for (int k = 0; k < nf; k++)
+				if (file_ids[k] == fj) { dup = 1; break; }
+			if (!dup) file_ids[nf++] = fj;
+		}
+		if (nf < 2) continue;
+
+		/* Group these files: master from the largest */
+		int largest = file_ids[0];
+		for (int k = 1; k < nf; k++)
+			if (recs[file_ids[k]].size > recs[largest].size)
+				largest = file_ids[k];
+
+		unsigned midx = 2 + (unsigned)nmasters;
+		unsigned msz = recs[largest].size;
+		if (msz > MaxMasterSize) msz = MaxMasterSize;
+		unsigned char *mdata = malloc(msz);
+		if (!mdata) err(EXIT_FAILURE, "malloc");
+		FILE *mf = fopen(recs[largest].path, "rb");
+		if (!mf) err(EXIT_FAILURE, "%s", recs[largest].path);
+		msz = (unsigned)fread(mdata, 1, msz, mf);
+		fclose(mf);
+
+		unsigned ref_len = 0, ref_ctr = 0;
+		for (int k = 0; k < nf; k++) {
+			recs[file_ids[k]].master_idx = (int)midx;
+			grouped[file_ids[k]] = true;
+			ref_len += recs[file_ids[k]].size;
+			ref_ctr++;
+		}
+
+		if (nmasters >= master_cap) {
+			master_cap *= 2;
+			masters = realloc(masters, (unsigned)master_cap * sizeof *masters);
+			if (!masters) err(EXIT_FAILURE, "realloc");
+		}
+		masters[nmasters] = (struct master_rec){
+			.idx = midx, .data = mdata, .size = msz,
+			.key = fnv1a(mdata, msz),
+			.ref_len = ref_len, .ref_ctr = ref_ctr
+		};
+		nmasters++;
+	}
+	free(chunk_map);
+	free(grouped);
+
+	/* Assign a default custom master to all ungrouped files.
+	   The original UC2 Pro never uses SuperMaster (index 0) in file
+	   COMPRESS records — it always assigns custom master indices (>= 2).
+	   Using SuperMaster triggers a hang in the original's extraction
+	   code path (ToToWalk with SUPERMASTER).  We build a custom master
+	   from the largest ungrouped file's content. */
+	{
+		int largest_ungrouped = -1;
+		for (int i = 0; i < nfiles; i++) {
+			if (recs[i].master_idx == 0) {
+				if (largest_ungrouped < 0 ||
+				    recs[i].size > recs[largest_ungrouped].size)
+					largest_ungrouped = i;
+			}
+		}
+		if (largest_ungrouped >= 0) {
+			unsigned midx = 2 + (unsigned)nmasters;
+			unsigned msz = recs[largest_ungrouped].size;
+			if (msz > MaxMasterSize) msz = MaxMasterSize;
+			if (msz < 1) msz = 1;
+			unsigned char *mdata = calloc(msz, 1);
+			if (!mdata) err(EXIT_FAILURE, "malloc");
+			if (recs[largest_ungrouped].size > 0) {
+				FILE *mf = fopen(recs[largest_ungrouped].path, "rb");
+				if (!mf) err(EXIT_FAILURE, "%s", recs[largest_ungrouped].path);
+				msz = (unsigned)fread(mdata, 1, msz, mf);
+				fclose(mf);
+			}
+
+			unsigned ref_len = 0, ref_ctr = 0;
+			for (int i = 0; i < nfiles; i++) {
+				if (recs[i].master_idx == 0) {
+					recs[i].master_idx = (int)midx;
+					ref_len += recs[i].size;
+					ref_ctr++;
+				}
+			}
+
+			if (nmasters >= master_cap) {
+				master_cap *= 2;
+				masters = realloc(masters, (unsigned)master_cap * sizeof *masters);
+				if (!masters) err(EXIT_FAILURE, "realloc");
+			}
+			masters[nmasters] = (struct master_rec){
+				.idx = midx, .data = mdata, .size = msz,
+				.key = fnv1a(mdata, msz),
+				.ref_len = ref_len, .ref_ctr = ref_ctr
+			};
+			nmasters++;
+		}
+	}
+
+	FILE *out = fopen(opt.archive, "wb");
+	if (!out)
+		err(EXIT_FAILURE, "%s", opt.archive);
+
+	/* Placeholder FHEAD + XHEAD (29 bytes) */
+	unsigned char header[29];
+	memset(header, 0, sizeof header);
+	fwrite(header, 1, 29, out);
+
+	/* Write master blocks (compressed with SuperMaster) */
+	for (int i = 0; i < nmasters; i++) {
+		masters[i].offset = tell32(out);
+		struct mem_reader mr = {.data = masters[i].data, .pos = 0, .len = masters[i].size};
+		unsigned csize = 0;
+		unsigned short csum = 0;
+		int ret = uc2_compress_ex(opt.level, supermaster, 49152,
+		                          mem_read_cb, &mr, fwrite_cb, out,
+		                          masters[i].size, &csum, &csize);
+		if (ret < 0)
+			errx(EXIT_FAILURE, "master %u: compression error %d", masters[i].idx, ret);
+		masters[i].csize = csize;
+		masters[i].csum = csum;
+		fprintf(stderr, "  master[%u]: %u -> %u (%u files)\n",
+		        masters[i].idx, masters[i].size, csize, masters[i].ref_ctr);
+	}
+
+	/* Phase 2: Compress each file */
+	for (int i = 0; i < nfiles; i++) {
+		recs[i].offset = tell32(out);
+
+		FILE *inf = fopen(recs[i].path, "rb");
+		if (!inf)
+			err(EXIT_FAILURE, "%s", recs[i].path);
+
+		const unsigned char *mdata = supermaster;
+		unsigned msz = 49152;
+		if (recs[i].master_idx >= 2) {
+			for (int m = 0; m < nmasters; m++) {
+				if (masters[m].idx == (unsigned)recs[i].master_idx) {
+					mdata = masters[m].data;
+					msz = masters[m].size;
+					break;
+				}
+			}
+		}
+
+		unsigned csize = 0;
+		unsigned short csum = 0;
+		int ret = uc2_compress_ex(opt.level, mdata, msz,
+		                          fread_cb, inf, fwrite_cb, out,
+		                          recs[i].size, &csum, &csize);
+		fclose(inf);
+		if (ret < 0)
+			errx(EXIT_FAILURE, "%s: compression error %d", recs[i].path, ret);
+
+		recs[i].csize = csize;
+		recs[i].csum = csum;
+		fprintf(stderr, "  %s: %u -> %u%s\n", recs[i].name, recs[i].size, csize,
+		        recs[i].master_idx >= 2 ? " (custom master)" : "");
+	}
+
+	/* Phase 3: Build raw central directory.
+	   Order: masters, then dirs (parent before child), then files.
+	   The scanner guarantees dirs are ordered parent-first. */
+	unsigned cdir_cap = 22; /* EndOfCdir + XTAIL + aserial */
+	for (int i = 0; i < nmasters; i++)
+		cdir_cap += 39;
+	for (int i = 0; i < ndirs; i++)
+		cdir_cap += 27 + 21 + (unsigned)strlen(dirs[i].name) + 1;
+	for (int i = 0; i < nfiles; i++)
+		cdir_cap += 47 + 21 + (unsigned)strlen(recs[i].name) + 1;
+
+	unsigned char *raw_cdir = malloc(cdir_cap);
+	if (!raw_cdir)
+		err(EXIT_FAILURE, "malloc");
+
+	unsigned char *p = raw_cdir;
+
+	/* Master entries */
+	for (int i = 0; i < nmasters; i++) {
+		*p++ = 3; /* MasterEntry */
+		w32(p, masters[i].idx); p += 4;
+		w32(p, masters[i].key); p += 4;
+		w32(p, masters[i].ref_len); p += 4;
+		w32(p, masters[i].ref_ctr); p += 4;
+		w16(p, masters[i].size); p += 2;
+		w16(p, masters[i].csum); p += 2;
+		w32(p, masters[i].csize); p += 4;
+		/* Masters are compressed with uc2_compress_ex(opt.level), so the
+		   recorded method must match: 10 (rANS) at levels 6-9.  Levels <= 5
+		   keep method 1 for compatibility with the original UC2 Pro reader
+		   (methods 1-9 share the Huffman bitstream). */
+		w16(p, opt.level >= 6 ? 10 : 1); p += 2;
+		w32(p, 0); p += 4; /* masterPrefix = SuperMaster */
+		w32(p, 1); p += 4;
+		w32(p, masters[i].offset); p += 4;
+	}
+
+	/* Directory entries: OHEAD(1) + OSMETA(22) + DIRMETA(4) + EXTMETA */
+	for (int i = 0; i < ndirs; i++) {
+		unsigned namelen = (unsigned)strlen(dirs[i].name);
+		*p++ = 1; /* DirEntry */
+		/* OSMETA (22 bytes) */
+		w32(p, dirs[i].parent_id); p += 4;
+		*p++ = 0x10; /* UC2_Attr_D = directory */
+		w32(p, dirs[i].dos_time); p += 4;
+		memcpy(p, dirs[i].dos_name, 11); p += 11;
+		*p++ = 0; /* hidden */
+		*p++ = 1; /* has tags */
+		/* DIRMETA (4 bytes) */
+		w32(p, dirs[i].id); p += 4;
+		/* EXTMETA: long name tag */
+		memcpy(p, "AIP:Win95 LongN", 16); p += 16;
+		w32(p, namelen + 1); p += 4;
+		*p++ = 0;
+		memcpy(p, dirs[i].name, namelen + 1); p += namelen + 1;
+	}
+
+	/* File entries */
+	for (int i = 0; i < nfiles; i++) {
+		unsigned namelen = (unsigned)strlen(recs[i].name);
+		*p++ = 2; /* FileEntry */
+		/* OSMETA (22 bytes) */
+		w32(p, recs[i].parent_id); p += 4;
+		*p++ = 0x20;
+		w32(p, recs[i].dos_time); p += 4;
+		memcpy(p, recs[i].dos_name, 11); p += 11;
+		*p++ = 0;  /* hidden */
+		*p++ = 1;  /* has tags */
+		/* FILEMETA (6 bytes) */
+		w32(p, recs[i].size); p += 4;
+		w16(p, recs[i].csum); p += 2;
+		/* COMPRESS (10 bytes) */
+		w32(p, recs[i].csize); p += 4;
+		w16(p, opt.level >= 6 ? 10 : (opt.level <= 1 ? 1 : opt.level)); p += 2;
+		w32(p, (unsigned)recs[i].master_idx); p += 4;
+		/* LOCATION (8 bytes) */
+		w32(p, 1); p += 4;
+		w32(p, recs[i].offset); p += 4;
+		/* EXTMETA: long name tag */
+		memcpy(p, "AIP:Win95 LongN", 16); p += 16;
+		w32(p, namelen + 1); p += 4;
+		*p++ = 0;
+		memcpy(p, recs[i].name, namelen + 1); p += namelen + 1;
+	}
+
+	/* EndOfCdir */
+	*p++ = 4;
+	*p++ = 0;
+	*p++ = 0;
+	w32(p, 0); p += 4;
+	memset(p, ' ', 11); p += 11;
+	w32(p, 0); p += 4;
+
+	unsigned cdir_size = (unsigned)(p - raw_cdir);
+	unsigned short cdir_csum = fletcher_csum(raw_cdir, cdir_size);
+
+	unsigned cdir_offset = tell32(out);
+	unsigned char crec[10];
+	memset(crec, 0, 10);
+	fwrite(crec, 1, 10, out);
+
+	struct mem_reader mr = {.data = raw_cdir, .pos = 0, .len = cdir_size};
+	unsigned cdir_csize = 0;
+	unsigned short cdir_comp_csum = 0;
+	int ret = uc2_compress(opt.level, mem_read_cb, &mr, fwrite_cb, out,
+	                       cdir_size, &cdir_comp_csum, &cdir_csize);
+	free(raw_cdir);
+	if (ret < 0)
+		errx(EXIT_FAILURE, "cdir compression error %d", ret);
+
+	unsigned total = tell32(out);
+
+	fseek(out, cdir_offset, SEEK_SET);
+	w32(crec + 0, 0);                 /* csize=0 matches original UC2 Pro */
+	w16(crec + 4, opt.level >= 6 ? 10 : (opt.level <= 1 ? 1 : opt.level));
+	w32(crec + 6, 1);                 /* masterPrefix = NoMaster */
+	fwrite(crec, 1, 10, out);
+
+	fseek(out, 0, SEEK_SET);
+	unsigned complen = total - 13;
+	w32(header + 0, 0x1A324355);
+	w32(header + 4, complen);
+	w32(header + 8, complen + 0x01B2C3D4);
+	header[12] = 0;
+	w32(header + 13, 1);
+	w32(header + 17, cdir_offset);
+	w16(header + 21, cdir_csum);
+	header[23] = 0;
+	w16(header + 24, 203);  /* match original UC2 Pro revision */
+	w16(header + 26, 200);
+	header[28] = 0;
+	fwrite(header, 1, 29, out);
+
+	fclose(out);
+	for (int i = 0; i < nmasters; i++)
+		free(masters[i].data);
+	free(masters);
+	free(supermaster);
+	free(dirs);
+	free(recs);
+	uc2_say(stderr, "Created %s (%d file%s, %d dir%s, %d master%s, %u bytes)\n",
+	        opt.archive, nfiles, nfiles == 1 ? "" : "s",
+	        ndirs, ndirs == 1 ? "" : "s",
+	        nmasters, nmasters == 1 ? "" : "s", total);
+	uc2_say(stderr, "Everything went OK\n");
+	return EXIT_SUCCESS;
+}
+
+/* Memory read/write callbacks for benchmark */
+struct bench_reader { const uint8_t *data; unsigned pos; unsigned len; };
+static int bench_read(void *ctx, void *buf, unsigned len)
+{
+	struct bench_reader *r = ctx;
+	unsigned avail = r->len - r->pos;
+	if (len > avail) len = avail;
+	if (len > 0) { memcpy(buf, r->data + r->pos, len); r->pos += len; }
+	return (int)len;
+}
+struct bench_writer { uint8_t *data; size_t pos; size_t cap; };
+static int bench_write(void *ctx, const void *ptr, unsigned len)
+{
+	struct bench_writer *w = ctx;
+	if (w->pos + len > w->cap) return -1;
+	memcpy(w->data + w->pos, ptr, len);
+	w->pos += len;
+	return 0;
+}
+
+/* Benchmark: compress input with all methods and report ratio + speed. */
+static int run_benchmark(int nfiles, char **files)
+{
+	/* Read all input files into memory */
+	size_t total_size = 0;
+	for (int i = 0; i < nfiles; i++) {
+		struct stat st;
+		if (stat(files[i], &st) < 0) err(EXIT_FAILURE, "%s", files[i]);
+		total_size += (size_t)st.st_size;
+	}
+	uint8_t *data = malloc(total_size);
+	if (!data) err(EXIT_FAILURE, "malloc");
+	size_t pos = 0;
+	for (int i = 0; i < nfiles; i++) {
+		FILE *f = fopen(files[i], "rb");
+		if (!f) err(EXIT_FAILURE, "%s", files[i]);
+		pos += fread(data + pos, 1, total_size - pos, f);
+		fclose(f);
+	}
+	total_size = pos;
+
+	printf("UC2 Benchmark: %zu bytes input (%d file%s)\n\n",
+	       total_size, nfiles, nfiles == 1 ? "" : "s");
+	printf("%-16s %10s %8s %10s %10s\n",
+	       "Method", "Compressed", "Ratio", "Enc (ms)", "Dec (ms)");
+	printf("%-16s %10s %8s %10s %10s\n",
+	       "----------------", "----------", "--------", "----------", "----------");
+
+	struct { int level; const char *name; } methods[] = {
+		{2, "Huffman Fast"},
+		{3, "Huffman Normal"},
+		{4, "Huffman Tight"},
+		{5, "Huffman Ultra"},
+		{6, "rANS Fast"},
+		{7, "rANS Normal"},
+		{8, "rANS Tight"},
+		{9, "rANS Ultra"},
+	};
+
+	struct mem_reader { const uint8_t *data; unsigned pos; unsigned len; };
+	/* Reuse fread_cb — actually need a mem reader */
+
+	for (int m = 0; m < (int)(sizeof methods / sizeof methods[0]); m++) {
+		/* Compress */
+		size_t out_cap = total_size + total_size / 8 + 4096;
+		uint8_t *out = malloc(out_cap);
+		if (!out) continue;
+
+		struct bench_reader rctx = {data, 0, (unsigned)total_size};
+		struct bench_writer wctx = {out, 0, out_cap};
+		unsigned short csum;
+		unsigned csize;
+
+		clock_t t0 = clock();
+		int ret = uc2_compress(methods[m].level,
+			bench_read, &rctx, bench_write, &wctx,
+			(unsigned)total_size, &csum, &csize);
+		clock_t t1 = clock();
+
+		if (ret < 0) {
+			printf("%-16s %10s\n", methods[m].name, "ERROR");
+			free(out);
+			continue;
+		}
+
+		double enc_ms = (double)(t1 - t0) * 1000.0 / CLOCKS_PER_SEC;
+		double ratio = total_size ? (double)csize / total_size * 100.0 : 0;
+
+		/* Decompress (round-trip verify) */
+		/* For now just report compression stats */
+		printf("%-16s %10u %7.1f%% %9.1f ms\n",
+		       methods[m].name, csize, ratio, enc_ms);
+
+		free(out);
+	}
+
+	/* Also test LZ4 */
+	{
+		size_t bound = total_size + total_size / 255 + 16;
+		uint8_t *lz4out = malloc(bound);
+		if (lz4out) {
+			clock_t t0 = clock();
+			size_t clen = uc2_lz4_compress(data, total_size, lz4out, bound);
+			clock_t t1 = clock();
+			double enc_ms = (double)(t1 - t0) * 1000.0 / CLOCKS_PER_SEC;
+			double ratio = total_size ? (double)clen / total_size * 100.0 : 0;
+			printf("%-16s %10zu %7.1f%% %9.1f ms\n",
+			       "LZ4 Ultra-fast", clen, ratio, enc_ms);
+			free(lz4out);
+		}
+	}
+
+	printf("\n");
+	free(data);
+	return EXIT_SUCCESS;
+}
+
+/* Pre-parse for ingest long options: --ingest, --ingest-restore.
+ * Both take a single path argument, accepted as either
+ *   --ingest <path>   (separate argv entry; rejected if path starts with '-')
+ *   --ingest=<path>   (inline). */
+static int extract_ingest_long_opts(int *argcp, char **argv, char **out_path)
+{
+	int argc = *argcp;
+	int mode = INGEST_MODE_NONE;
+	*out_path = NULL;
+	for (int i = 1; i < argc; ) {
+		const char *a = argv[i];
+		int matched_args = 0;
+		int new_mode = INGEST_MODE_NONE;
+		const char *inline_value = NULL;
+
+		if (strcmp(a, "--ingest") == 0) {
+			new_mode = INGEST_MODE_WRITE;
+			matched_args = 1;
+		} else if (strncmp(a, "--ingest=", 9) == 0) {
+			new_mode = INGEST_MODE_WRITE;
+			matched_args = 1;
+			inline_value = a + 9;
+		} else if (strcmp(a, "--ingest-restore") == 0) {
+			new_mode = INGEST_MODE_RESTORE;
+			matched_args = 1;
+		} else if (strncmp(a, "--ingest-restore=", 17) == 0) {
+			new_mode = INGEST_MODE_RESTORE;
+			matched_args = 1;
+			inline_value = a + 17;
+		}
+
+		if (!matched_args) { i++; continue; }
+
+		mode = new_mode;
+		if (inline_value) {
+			*out_path = (char *)inline_value;
+		} else {
+			if (i + 1 >= argc || argv[i + 1][0] == '-')
+				errx(EXIT_FAILURE,
+				     "%s requires a path argument", a);
+			*out_path = argv[i + 1];
+			matched_args = 2;
+		}
+		for (int j = i; j + matched_args < argc; j++)
+			argv[j] = argv[j + matched_args];
+		argc -= matched_args;
+	}
+	*argcp = argc;
+	return mode;
+}
+
+static int cmd_ingest_write(const char *archive_path)
+{
+	uint8_t *buf = NULL;
+	size_t cap = 0, len = 0;
+	const size_t chunk = 64 * 1024;
+	for (;;) {
+		if (len + chunk > cap) {
+			size_t ncap = cap ? cap * 2 : chunk;
+			while (ncap < len + chunk) ncap *= 2;
+			uint8_t *p = realloc(buf, ncap);
+			if (!p) { free(buf); err(EXIT_FAILURE, "realloc"); }
+			buf = p;
+			cap = ncap;
+		}
+		size_t n = fread(buf + len, 1, chunk, stdin);
+		len += n;
+		if (n < chunk) {
+			if (ferror(stdin)) {
+				free(buf);
+				err(EXIT_FAILURE, "read stdin");
+			}
+			break;
+		}
+	}
+
+	struct uc2_ingest_stats st;
+	int rc = uc2_ingest_write(archive_path, buf, len, 0, &st);
+	free(buf);
+	if (rc != 0)
+		errx(EXIT_FAILURE, "ingest write failed: %s", archive_path);
+
+	uc2_say(stderr,
+	        "ingested %llu bytes -> %d chunks (%d new, %d deduped, %llu bytes saved)\n",
+	        (unsigned long long)st.bytes_in,
+	        st.chunks_total, st.chunks_new, st.chunks_dedup,
+	        (unsigned long long)st.bytes_saved);
+	return EXIT_SUCCESS;
+}
+
+static int cmd_ingest_restore(const char *archive_path)
+{
+	if (uc2_ingest_restore(archive_path, stdout) != 0)
+		errx(EXIT_FAILURE, "ingest restore failed: %s", archive_path);
+	return EXIT_SUCCESS;
+}
+
+/* Pre-parse for OTS long options: --ots-attach, --ots-extract, --ots-info.
+ * Removes matched arguments from argv in place so the existing getopt loop
+ * doesn't see them.  --ots-attach takes a value, accepted as either
+ *   --ots-attach <path>     (separate argv entry; rejected if path starts with '-')
+ *   --ots-attach=<path>     (inline). */
+static int extract_ots_long_opts(int *argcp, char **argv, char **out_value)
+{
+	int argc = *argcp;
+	int mode = OTS_MODE_NONE;
+	*out_value = NULL;
+	for (int i = 1; i < argc; ) {
+		const char *a = argv[i];
+		int matched_args = 0;
+		int new_mode = OTS_MODE_NONE;
+		const char *inline_value = NULL;
+
+		if (strcmp(a, "--ots-attach") == 0) {
+			new_mode = OTS_MODE_ATTACH;
+			matched_args = 1;
+		} else if (strncmp(a, "--ots-attach=", 13) == 0) {
+			new_mode = OTS_MODE_ATTACH;
+			matched_args = 1;
+			inline_value = a + 13;
+		} else if (strcmp(a, "--ots-extract") == 0) {
+			new_mode = OTS_MODE_EXTRACT;
+			matched_args = 1;
+		} else if (strcmp(a, "--ots-info") == 0) {
+			new_mode = OTS_MODE_INFO;
+			matched_args = 1;
+		}
+
+		if (!matched_args) { i++; continue; }
+
+		mode = new_mode;
+		if (new_mode == OTS_MODE_ATTACH) {
+			if (inline_value) {
+				*out_value = (char *)inline_value;
+			} else {
+				if (i + 1 >= argc || argv[i + 1][0] == '-')
+					errx(EXIT_FAILURE,
+					     "--ots-attach requires a path argument "
+					     "(use --ots-attach=<path> if your path starts with '-')");
+				*out_value = argv[i + 1];
+				matched_args = 2;
+			}
+		}
+		for (int j = i; j + matched_args < argc; j++)
+			argv[j] = argv[j + matched_args];
+		argc -= matched_args;
+	}
+	*argcp = argc;
+	return mode;
+}
+
+int main(int argc, char *argv[])
+{
+#ifdef __DJGPP__
+	setprogname(argv[0]);
+#endif
+	if (argc == 1)
+		goto usage;
+
+	{
+		char *ingest_path = NULL;
+		opt.ingest_mode = extract_ingest_long_opts(&argc, argv, &ingest_path);
+		if (opt.ingest_mode == INGEST_MODE_WRITE)
+			return cmd_ingest_write(ingest_path);
+		if (opt.ingest_mode == INGEST_MODE_RESTORE)
+			return cmd_ingest_restore(ingest_path);
+	}
+
+	opt.ots_mode = extract_ots_long_opts(&argc, argv, &opt.ots_path);
+
+	for (;;) {
+		int o = getopt(argc, argv, "xlatfd:C:cpDTh?wL:qB");
+		if (o == -1)
+			break;
+		switch (o) {
+		case 'x':
+			opt.list = opt.test = false;
+			break;
+		case 'l':
+			opt.list = true;
+			break;
+		case 'a':
+			opt.all = true;
+			break;
+		case 't':
+			opt.test = true;
+			break;
+		case 'f':
+			opt.overwrite = true;
+			break;
+		case 'd':
+			opt.dest = *optarg ? optarg : 0;
+			break;
+		case 'C':
+			if (chdir(optarg) < 0)
+				err(EXIT_FAILURE, "%s", optarg);
+			break;
+		case 'c':
+		case 'p':
+			opt.pipe = true;
+			break;
+		case 'D':
+			opt.no_file_meta = opt.no_dir_meta;
+			opt.no_dir_meta = true;
+			break;
+		case 'w':
+			opt.create = true;
+			break;
+		case 'q':
+			opt.quiet = true;
+			break;
+		case 'B':
+			opt.benchmark = true;
+			break;
+		case 'L':
+			opt.level = atoi(optarg);
+			if (opt.level < 2 || opt.level > 9)
+				errx(EXIT_FAILURE, "Compression level must be 2..9 (2-5=Huffman, 6-9=rANS)");
+			break;
+		case 'T':
+			opt.sep = '\t';
+			break;
+		case '?':
+			if (optopt)
+				return EXIT_FAILURE;
+		case 'h':
+			opt.help = true;
+			printf("UC2 " UC2_VERSION_STRING " (UltraCompressor II)\n"
+			       "\"Fast, reliable and superior compression.\"\n\n");
+usage:
+			printf(
+				"uc2 [-afpqDT] [-d destination] archive.uc2 [files]...\n"
+				"uc2 -l [-aqT] archive.uc2 [files]...\n"
+				"uc2 -t [-aq] archive.uc2 [files]...\n"
+				"uc2 -w [-qL level] archive.uc2 files...\n"
+				"uc2 -B files...   (benchmark all methods)\n"
+				"uc2 --ots-attach <proof.ots> [-f] archive.uc2\n"
+				"uc2 --ots-extract archive.uc2 <out.ots>\n"
+				"uc2 --ots-info archive.uc2\n"
+				"uc2 --ingest <archive>            # stdin -> dedup blockstore\n"
+				"uc2 --ingest-restore <archive>    # blockstore -> stdout\n"
+			);
+			if (!opt.help)
+				printf("uc2 -h\n");
+			else
+				printf(
+					" -l      List\n"
+					" -t      Test\n"
+					" -w      Create archive\n"
+					" -L n    Level: 2=Fast 3=Normal 4=Tight(default) 5=Ultra 6-9=rANS\n"
+					" -a      All versions of files\n"
+					" -d path Destination to extract to\n"
+					" -f      Overwrite\n"
+					" -p      To stdout\n"
+					" -B      Benchmark all methods on input files\n"
+					" -q      Quiet (suppress status messages)\n"
+					" -D      Do not set time and permissions of dirs (also files: -DD)\n"
+					" -T      Tab-separated\n"
+					"\nhttps://github.com/evvaletov/uc2\n"
+				);
+			return opt.help ? EXIT_SUCCESS : EXIT_FAILURE;
+		}
+	}
+
+	if (argc == optind)
+		errx(EXIT_FAILURE, "Archive not given");
+	opt.archive = argv[optind++];
+
+	if (opt.benchmark) {
+		/* -B: benchmark uses remaining args as input files (archive arg is first file) */
+		return run_benchmark(argc - optind + 1, argv + optind - 1);
+	}
+
+	if (opt.ots_mode == OTS_MODE_ATTACH)
+		return cmd_ots_attach(opt.archive, opt.ots_path, opt.overwrite);
+	if (opt.ots_mode == OTS_MODE_EXTRACT) {
+		const char *out = optind < argc ? argv[optind] : NULL;
+		if (!out)
+			errx(EXIT_FAILURE, "--ots-extract requires an output path");
+		return cmd_ots_extract(opt.archive, out);
+	}
+	if (opt.ots_mode == OTS_MODE_INFO)
+		return cmd_ots_info(opt.archive);
+
+	if (opt.create) {
+		if (optind == argc)
+			errx(EXIT_FAILURE, "No files to add");
+		return create_archive(argc - optind, argv + optind);
+	}
+
+	FILE *f = fopen(opt.archive, "rb");
+	if (!f) err(EXIT_FAILURE, "%s", opt.archive);
+
+	uc2_handle uc2 = uc2_open(&io, f);
+
+	list_init(&files);
+	list_init(&dirs);
+
+	for (;;) {
+		struct node *ne = malloc(sizeof *ne);
+		if (!ne) err(EXIT_FAILURE, 0);
+
+		int ret = uc2_read_cdir(uc2, &ne->entry);
+		if (ret < 0 || ret == UC2_End) {
+			free(ne);
+			if (ret == UC2_End)
+				break;
+			uc2err(uc2, ret, 0);
+			uc2_close(uc2);
+			fclose(f);
+			return EXIT_FAILURE;
+		}
+
+		while (ret == UC2_TaggedEntry) {
+			char *tag;
+			void *data;
+			unsigned size;
+			ret = uc2_get_tag(uc2, &ne->entry, &tag, &data, &size);
+			if (ret < 0) {
+				uc2err(uc2, ret, 0);
+				free(ne);
+				uc2_close(uc2);
+				fclose(f);
+				return EXIT_FAILURE;
+			}
+		}
+
+		new_entry(ne);
+	}
+
+	char label[12];
+	uc2_finish_cdir(uc2, label);
+
+	if (optind == argc) {
+		mark(&root, true);
+	} else do {
+		match_pattern(argv[optind++]);
+	} while (optind < argc);
+
+	if (opt.list) {
+		unsigned max = 0;
+		int size_w = 0;
+		if (opt.sep == ' ') {
+			visit_selected(&root, max_size_cb, &max);
+			size_w = snprintf(0, 0, "%u", max);
+		}
+		visit_selected(&root, print_entry_cb, &size_w);
+		if (opt.sep == ' ') {
+			if (*label)
+				printf("Label: %s\n", label);
+		}
+	}
+
+	if (opt.pipe || opt.test) {
+		if (opt.test)
+			uc2_say(stderr, "Testing archive integrity...\n");
+		visit_selected(&root, pipe_cb, uc2);
+		if (opt.test) {
+			if (verify_trailer_if_present(opt.archive)) {
+				uc2_close(uc2);
+				fclose(f);
+				return EXIT_FAILURE;
+			}
+			uc2_say(stderr, "Everything went OK\n");
+		}
+	} else if (!opt.list) {
+		struct path path = {.uc2 = uc2};
+		char *p = path.buffer;
+		if (opt.dest) {
+			unsigned n = strlen(opt.dest);
+			assert(n);
+			if (opt.dest[n-1] == '/')
+				n--;
+			if (n >= sizeof path.buffer)
+				errx(EXIT_FAILURE, "Destination too long");
+			memcpy(p, opt.dest, n);
+			p += n;
+			*p++ = '/';
+		}
+		path.ptr = p;
+		visit_selected(&root, extract_cb, &path);
+	}
+
+	if (!opt.list && !opt.test && !opt.pipe)
+		uc2_say(stderr, "Decompression complete\n");
+	uc2_close(uc2);
+	fclose(f);
+	return EXIT_SUCCESS;
+}

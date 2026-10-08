@@ -78,6 +78,60 @@ Description: LHA archive compression and extraction utility (native C)
  full archive creation (-a), updating (-u), testing (-t) and extraction (-x).
  Compiled for Trinity Desktop Environment (TDE) / TdeZip archiver.
 
+Package: libxar-dev
+Source: xar
+Version: 1.8.0.498-2
+Architecture: amd64
+Maintainer: Ole Streicher <olebole@debian.org>
+Installed-Size: 232
+Depends: libxar1 (= 1.8.0.498-2)
+Filename: pool/main/x/xar/libxar-dev_1.8.0.498-2_amd64.deb
+Size: 49244
+MD5sum: 6f218e767ab70607c0c06413b24594fd
+SHA1: bf74ac21ae377485ba62f8c4d39f6bcf31ad7284
+SHA256: 906b57f86f400984a607d819a82fef952446f69fda7606e6a02dbc3c6be65fe4
+Section: libdevel
+Priority: optional
+Homepage: https://github.com/apple-oss-distributions/xar
+Description: eXtensible ARchiver (development files)
+ The XAR project aims to provide an easily extensible archive format. Important
+ design decisions include an easily extensible XML table of contents for random
+ access to archived files, storing the toc at the beginning of the archive to
+ allow for efficient handling of streamed archives, the ability to handle files
+ of arbitrarily large sizes, the ability to choose independent encodings for
+ individual files in the archive, the ability to store checksums for individual
+ files in both compressed and uncompressed form, and the ability to query the
+ table of content's rich meta-data.
+ .
+ This package contains the libxar headers.
+
+Package: libxar1
+Source: xar
+Version: 1.8.0.498-2
+Architecture: amd64
+Maintainer: Ole Streicher <olebole@debian.org>
+Installed-Size: 132
+Depends: libacl1 (>= 2.2.23), libbz2-1.0, libc6 (>= 2.33), libssl3 (>= 3.0.0), libxml2 (>= 2.7.4), zlib1g (>= 1:1.1.4)
+Filename: pool/main/x/xar/libxar1_1.8.0.498-2_amd64.deb
+Size: 43716
+MD5sum: 5ee8356c2c2bbfa7955b972c22222dfe
+SHA1: be183a2799702710becd80dc2f209b2e90b743fd
+SHA256: 3ab00afa8b752be42b0c1ad28fa4816fd2d5f1ebce0c2a882ad50473972a525a
+Section: libs
+Priority: optional
+Homepage: https://github.com/apple-oss-distributions/xar
+Description: eXtensible ARchiver (library)
+ The XAR project aims to provide an easily extensible archive format. Important
+ design decisions include an easily extensible XML table of contents for random
+ access to archived files, storing the toc at the beginning of the archive to
+ allow for efficient handling of streamed archives, the ability to handle files
+ of arbitrarily large sizes, the ability to choose independent encodings for
+ individual files in the archive, the ability to store checksums for individual
+ files in both compressed and uncompressed form, and the ability to query the
+ table of content's rich meta-data.
+ .
+ This package contains the libxar library.
+
 Package: lzav
 Version: 1.0-1
 Architecture: amd64
@@ -199,6 +253,52 @@ Description: PEA archive format compression and extraction engine (native C)
  Supports store and deflate compression, multiple checksum algorithms
  (CRC32, SHA256, Adler32, Blake2...), authenticated encryption
  (EAX, EAX256, HMAC, Twofish, Serpent, cascades), keyfiles, and multi-volume archives.
+
+Package: uc2
+Version: 3.0.0-1
+Architecture: amd64
+Maintainer: seb3773 <99963207+seb3773@users.noreply.github.com>
+Depends: libc6 (>= 2.15)
+Provides: uc2
+Filename: pool/main/u/uc2/uc2_3.0.0-1_amd64.deb
+Size: 85800
+MD5sum: 50b7bdec47b7d25b855dc27a70c2436a
+SHA1: e5cf72301236a3bb8336b730313bce32d5b06daa
+SHA256: c49be9093ac44c366dcdebb2880587fb0caf0e850aa672ad380d631f9751e2aa
+Section: utils
+Priority: optional
+Description: UltraCompressor II archiver revival
+ Modern C99 revival of UltraCompressor II, the DOS-era archiver by Nico
+ de Vries (1992-1996). Features full backward compatibility with DOS UC2 Pro,
+ content-defined chunking (CDC) deduplication, rANS entropy coding, and
+ BLAKE3 archive integrity checking.
+ Packaged for Trinity Desktop Environment (TDE) / TdeZip companion tools.
+
+Package: xar
+Version: 1.8.0.498-2
+Architecture: amd64
+Maintainer: Ole Streicher <olebole@debian.org>
+Installed-Size: 49
+Depends: libc6 (>= 2.34), libxar1 (= 1.8.0.498-2)
+Filename: pool/main/x/xar/xar_1.8.0.498-2_amd64.deb
+Size: 15508
+MD5sum: 1472b6086cce7d1978041b12a7786b61
+SHA1: 184f1e2ba57e27c007dd133a2a8304cb47c912b5
+SHA256: 2b45a69d6bcd891584d51099044d0c4cfea8fd2672c41552bf62bc56cabb0588
+Section: utils
+Priority: optional
+Homepage: https://github.com/apple-oss-distributions/xar
+Description: eXtensible ARchiver
+ The XAR project aims to provide an easily extensible archive format. Important
+ design decisions include an easily extensible XML table of contents for random
+ access to archived files, storing the toc at the beginning of the archive to
+ allow for efficient handling of streamed archives, the ability to handle files
+ of arbitrarily large sizes, the ability to choose independent encodings for
+ individual files in the archive, the ability to store checksums for individual
+ files in both compressed and uncompressed form, and the ability to query the
+ table of content's rich meta-data.
+ .
+ This package contains the xar binary.
 
 Package: zoo
 Version: 2.10-28
